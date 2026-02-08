@@ -1,15 +1,21 @@
-Rules (expanded v0.1)
+Rules Versioned 0.102
 
 lastbreach is a shelter management sim where the dramatic events happened before the game starts. Play is about maintaining a workable routine under scarcity: warmth, food, tools, morale, and the tradeoffs that connect them.
+
+Design intent:
+• Planning matters more than reflexes.
+• Shortages create decisions rather than arbitrary punishment.
+• “Mundane” tasks must matter mechanically.
+• Threat is intermittent and systemic: it punishes neglected structure, sloppy routines, and poor readiness.
 
 1) Time, turns, and the day plan
 The simulation advances in discrete time steps (“ticks”). Each day begins in a planning phase where the player assigns tasks based on shelter needs, character condition, stockpiles, and outside risk. The day then resolves as scheduled tasks consume time and resources, produce outcomes, and generate wear, waste, and recovery needs.
 
 A simple default day structure:
-• Morning plan: assign tasks + set priorities.
+• Morning plan: assign tasks + set priorities + set defense posture.
 • Work blocks: tasks resolve in order (or by timeline).
-• Evening: consumption, cleanup, sleep, treatment.
-• Overnight: temperature/energy drain, plant growth ticks, item decay checks.
+• Evening: consumption, cleanup, sleep, treatment, weapon upkeep if needed.
+• Overnight: temperature/energy drain, plant growth ticks, item decay checks, and threat checks.
 
 2) Characters and state
 Each survivor has a state vector that determines efficiency and risk:
@@ -18,13 +24,13 @@ Each survivor has a state vector that determines efficiency and risk:
 • Morale: affected by comfort, social time, entertainment, victories, and prolonged shortages.
 • Injury / Illness: created by accidents, exposure, and failed risky tasks; treated via first aid/medical tasks.
 
-Design intent:
-• Planning matters more than reflexes.
-• Shortages create decisions rather than arbitrary punishment.
-• “Mundane” tasks must matter mechanically.
+State is not flavor:
+• Low morale increases error rate.
+• High fatigue reduces output and increases accident and combat injury risk.
+• Untreated illness increases daily penalties and may cascade into failure.
 
 3) Tasks: requirements, resolution, and outcomes
-Tasks are the action vocabulary available to the scheduler (e.g., Cooking, Water filtration, Electronics repair, Fishing, Scouting outside, Heating, Cleaning, Medical treatment, Power management, Radio communication, etc.).
+Tasks are the action vocabulary available to the scheduler (e.g., Cooking, Water filtration, Electronics repair, Fishing, Scouting outside, Heating, Cleaning, Medical treatment, Power management, Radio communication, Defensive shooting, Defensive combat, Gun smithing).
 
 Each task has:
 • Time cost: how many ticks it occupies.
@@ -43,8 +49,8 @@ Outcome calculation (rule-of-thumb):
 Every item has two values: maximum condition and current (actual) condition. “Perfect condition” is when current equals maximum.
 
 Condition is a universal lever:
-• Tools (soldering iron, screwdriver set, multimeter, gun cleaning kit) lose condition when used and may reduce success chances when worn.
-• Shelter structures/furniture (tiny shelter structure, bed, water filter, fridge, barrel heater) degrade through use and time; poor condition causes efficiency penalties or safety hazards.
+• Tools lose condition when used and may reduce success chances when worn.
+• Shelter structures/furniture degrade through use and time; poor condition causes efficiency penalties or safety hazards.
 • Organic items (food, fish, plants) decay via condition loss; lower condition reduces nutrition or usability and can turn into waste/spoilage outcomes.
 
 Suggested condition thresholds:
@@ -53,7 +59,7 @@ Suggested condition thresholds:
 • 20–49%: major penalties (frequent failures / reduced output)
 • 0–19%: broken/unusable (or hazardous)
 
-Maintenance tasks convert time + parts into restored condition (general shelter chores, maintenance chores, cleaning, gunsmithing, electronics repair, diagnostics, soldering).
+Maintenance tasks convert time + parts into restored condition (general shelter chores, maintenance chores, cleaning, gun smithing, electronics repair, diagnostics, soldering).
 
 5) Plants, hydroponics, and growth
 Plants are a special item class: each plant is identified as a kind of plant with a maximum and actual organic value. Plants produce named items.
@@ -68,13 +74,12 @@ Rule expansion:
 The shelter is the “character” you’re really managing: heat, power, water, and structural condition affect safety and efficiency.
 
 Heat
-• Heat sources: campfire / fire pit / barrel heater / camp stove + firewood + lighter.
-• Heating tasks convert fuel into a shelter temperature buffer for the next ticks.
+• Heat sources convert fuel into a shelter temperature buffer for the next ticks.
 • Low temperature increases fatigue, injury risk, and food spoilage; high temperature increases water usage and can damage some stored goods.
 
 Power
-• Power chain: solar panel → charge controller → battery → inverter → loads (LED light bank, fridge, computer, radio gear).
-• Generator + fuel can provides burst power with noise/maintenance costs.
+• Power chain: generation → storage → conversion → loads.
+• Generator + fuel provides burst power with noise/maintenance costs.
 • Power management is a planning task that sets priorities (keep fridge on vs. run workshop tools).
 • Low power reduces productivity, increases mistakes, and harms morale (darkness, cold meals, no comms).
 
@@ -84,8 +89,9 @@ Water
 • Missed cleaning tasks increase contamination risk and raise the daily sickness check.
 
 Structure
-• Shelter structures (train-car living compartment, treehouse structure, tiny shelter structure) have condition and can be upgraded or repaired.
+• Shelter structures have condition and can be upgraded or repaired.
 • Poor structure condition increases outside pressure (drafts, leaks), reduces heat retention, and increases accident odds during storms.
+• Structure condition also influences zombie breach likelihood and breach severity (see section 10a).
 
 7) Food: cooking, preservation, and routine
 Food exists as raw ingredients and prepared meals.
@@ -95,26 +101,113 @@ Food exists as raw ingredients and prepared meals.
 
 8) Outside actions: scouting, fishing, and risk
 Outside expeditions are short, risky, and purpose-driven.
-• Scouting outside gathers information and occasional salvage but risks injury/exposure.
+• Scouting outside gathers information and occasional salvage but risks injury/exposure and threat contact.
 • Fishing requires a dependency chain (rod, line, hooks, bait/lures, bucket/net; then fish cleaning).
-• Defensive drills (defensive shooting/combat) train readiness and reduce severity of occasional threats rather than driving constant combat.
+• Outside work becomes more dangerous when the shelter is noisy, poorly maintained, or when recent breaches have occurred.
 
 9) Morale and personalizing the shelter
 The shelter should feel increasingly personal over time, so morale is not flavor—it’s throughput.
 • Comfort items and leisure tasks (reading, socializing, watching, games, guitar, crafting, art) restore morale and slow burnout.
 • Morale influences productivity and error rate, making “mundane” choices strategically meaningful.
+• A successful defense (repelling a breach with minimal harm) can grant a morale bump; a messy breach can impose a morale penalty.
 
 10) Events and external pressure
 External pressure (weather, scarcity, occasional threats) forces reprioritization.
+
 Event rules:
 • At set intervals (daily/weekly), roll for weather and incidents.
 • Weather modifies heat/power/water costs and outside risk.
 • Incidents target weak links (low-condition tools, unmaintained power chain, poor hygiene, low morale) rather than random punishment.
 
-11) Progression and win/loss framing
+10a) Zombie breaches: pressure, defenses, and repair loops
+Zombie breaches are intermittent incidents that stress the shelter. They are designed to:
+• Reward maintenance and preparedness.
+• Punish neglected structure, fatigue spirals, and disorganized storage.
+• Create meaningful tradeoffs in weapon use, ammo spend, and noise.
+
+A breach occurs during a Threat Check (commonly overnight, but may occur during storms or after noisy days).
+Breach chance and severity are influenced by:
+• Structure condition (weak points, leaks, drafts, loose panels).
+• Shelter “signature” (noise and light; generator use and sustained gunfire raise it).
+• Weather (storms and darkness increase repair difficulty and error rates).
+• Survivor readiness (fatigue/morale/injuries reduce defense performance).
+• Recent breach history (a damaged shelter is more likely to be tested again until fully repaired).
+
+Breach levels (example):
+• Level 1: Probe — a small group tests doors/windows; quick response usually holds.
+• Level 2: Push — sustained pressure; structure takes damage if not answered.
+• Level 3: Break-in — entry occurs; you must fight inside and then repair immediately.
+
+Breach resolution has two phases:
+
+A) HOLD PHASE (prevent entry / reduce pressure)
+During the Hold Phase, defenders assigned to defensive tasks generate “repel progress” each tick.
+• Defensive shooting: uses firearms + ammunition; spends ammo; increases weapon wear; can be noisy.
+• Defensive combat: close-quarters defense with lower noise but higher injury risk.
+
+Combat resolution is systemic, not twitch-based:
+• Each tick, defenders roll effectiveness from (readiness + tool/weapon condition + posture + environment).
+• Success reduces breach pressure.
+• Failures can cause:
+  - Structure damage (condition loss on shelter structure elements).
+  - Injury/illness risk spikes (especially in close combat).
+  - Ammo waste or weapon malfunction risk (more likely with worn weapons).
+
+If breach pressure is reduced to zero before entry, the breach is repelled.
+If breach pressure remains high, structure condition drops; at very low structure condition, entry becomes likely.
+
+B) REPAIR PHASE (restore integrity / reduce future breach odds)
+After a breach (especially Level 2+), repairs become urgent:
+• General shelter chores / Maintenance chores restore structural condition and seal weak points.
+• Cleaning reduces contamination and lowers illness checks after close contact.
+• Gun smithing and cleaning restores weapon condition and reduces malfunction risk for the next breach.
+
+Mandatory post-breach “stabilize chain” (recommended):
+1) Cleaning (reduce illness/contamination risk)
+2) Maintenance chores / General shelter chores (restore structure condition)
+3) Gun smithing / weapon upkeep (restore weapon condition, reduce failures)
+4) Resting / Socializing if morale/fatigue are degraded (prevent next-day collapse)
+
+Weapon and repair readiness (proximity matters):
+• If weapons, ammo, and quick repair tools are stored “ready” near likely breach points (doors, ladders, hatches), defenders lose fewer ticks to retrieval.
+• If readiness is poor, the Hold Phase begins late; breach pressure escalates and structure damage becomes more likely.
+
+Weapon variety matters (why multiple weapon types exist):
+• Rifle: high stopping power, best for high-pressure breaches; tends to be louder and increases future threat pressure if overused; benefits strongly from good upkeep.
+• Pistol: fast deployment and flexible indoor angles; moderate power; useful for probes and conserving rifle ammo.
+• Revolver: reliability niche; performs better when upkeep is behind; good emergency weapon when conditions are bad.
+• Ammunition is a pacing resource: spending it solves today but creates future vulnerability unless scouting and resupply keep up.
+• Weapon maintenance tools (cleaning kit, gunsmith toolkit) convert time into readiness, lowering malfunction risk and improving defense output.
+
+11) Optional: Quiet defense vs Loud defense (daily posture)
+Each morning plan includes selecting a defense posture that influences threat behavior and defense outcomes.
+
+Quiet Defense:
+• Goal: repel with minimal noise to avoid attracting larger groups later.
+• Effects:
+  - Lower “signature” gain during defense (reduces future breach chance).
+  - Defensive combat becomes more viable; defensive shooting has stricter ammo discipline.
+  - Higher injury risk during Hold Phase (more close contact).
+  - Better long-term stability if structure and morale are steady.
+
+Loud Defense:
+• Goal: maximize immediate stopping power to minimize injuries right now.
+• Effects:
+  - Defensive shooting becomes more effective in the Hold Phase.
+  - Lower immediate injury risk (fewer close-contact failures).
+  - Higher “signature” gain (increases chance or severity of future threat checks).
+  - More ammo spend and faster weapon wear, increasing maintenance burden.
+
+Posture interacts with readiness:
+• Loud Defense without ammo stockpiles and weapon upkeep can collapse quickly.
+• Quiet Defense without good structure condition and rested survivors can lead to injuries and cascading fatigue.
+
+12) Progression and win/loss framing
 Progression comes from improved routines, tool quality, and shelter upgrades—not a traditional power fantasy.
 • Short-term success: keep everyone alive, stable, and functional for another day.
-• Medium-term success: build redundancy (extra water storage, spare battery, preserved food stock, better heat retention).
-• Long-term success: a resilient routine where shocks are survivable.
+• Medium-term success: build redundancy (extra water storage, spare battery, preserved food stock, better heat retention, spare parts, ready racks).
+• Long-term success: a resilient routine where shocks (weather, scarcity, breaches) are survivable.
 
-Failure is typically cascading: neglected maintenance lowers condition; poor condition increases task failures; failures consume resources; scarcity hurts morale; low morale reduces output—until the routine breaks. The player’s job is to notice weak links early and spend time to stabilize them.
+Failure is typically cascading:
+neglected maintenance lowers condition → poor condition increases task failures → failures consume resources → scarcity hurts morale → low morale reduces output → until the routine breaks.
+The player’s job is to notice weak links early and spend time to stabilize them—before the next breach tests them.

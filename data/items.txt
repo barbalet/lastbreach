@@ -16,6 +16,7 @@ Solar panel
 Charge controller
 Inverter
 Battery
+Baseball bat
 Generator
 Fuel can
 Electrical gear
