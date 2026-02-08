@@ -123,3 +123,7 @@ Pencils
 Tools
 Utility gear
 Stuffed toy
+Turntable
+Amplifier
+Vinyl record
+Drums
