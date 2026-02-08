@@ -7,8 +7,6 @@ There is a class of games that currently only exist in AI generated mobile ads.
 
 [![Watch the video](https://img.youtube.com/vi/g9OBQQ4AIxw/mqdefault.jpg)](https://www.youtube.com/watch?v=g9OBQQ4AIxw)
 
-[![Watch the video](https://img.youtube.com/vi/HZc5oDBxg4w/mqdefault.jpg)](https://www.youtube.com/watch?v=HZc5oDBxg4w)
-
 Given the simulation aspects of these games or at least what they appear to be it interested me to see how easy it would be to write a compelling game version of this. As the image generation engine is commercially available:
 
 For this exact look, the best system is a diffusion workflow in ComfyUI using:
