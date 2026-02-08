@@ -21,4 +21,4 @@ It can lock the same “cozy shelter + hostile outside” aesthetic across many 
 You can reuse your existing frames directly as style anchors.
 It’s scriptable and repeatable (good for generating lots of variants).
 If you want fastest no-setup (less control), use Midjourney or Leonardo AI.
-If you want reliable style consistency and volume, ComfyUI pipeline is the right system.```
+If you want reliable style consistency and volume, ComfyUI pipeline is the right system.
