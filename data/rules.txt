@@ -1,5 +1,120 @@
-Rules
+Rules (expanded v0.1)
 
-Every item has a maximum and an actual condition value - be it organic or made from materials. Condition here means in perfect condition where actual condition reached maximum condition.
+lastbreach is a shelter management sim where the dramatic events happened before the game starts. Play is about maintaining a workable routine under scarcity: warmth, food, tools, morale, and the tradeoffs that connect them.
 
-Every plant is identified as a kind of plant with a maximum and actual organic value. Plants produce named item produces.
+1) Time, turns, and the day plan
+The simulation advances in discrete time steps (“ticks”). Each day begins in a planning phase where the player assigns tasks based on shelter needs, character condition, stockpiles, and outside risk. The day then resolves as scheduled tasks consume time and resources, produce outcomes, and generate wear, waste, and recovery needs.
+
+A simple default day structure:
+• Morning plan: assign tasks + set priorities.
+• Work blocks: tasks resolve in order (or by timeline).
+• Evening: consumption, cleanup, sleep, treatment.
+• Overnight: temperature/energy drain, plant growth ticks, item decay checks.
+
+2) Characters and state
+Each survivor has a state vector that determines efficiency and risk:
+• Hunger / Hydration: driven by eating and drinking; low levels reduce task output and raise injury/illness risk.
+• Fatigue: rises with work; lowered by resting and sleeping.
+• Morale: affected by comfort, social time, entertainment, victories, and prolonged shortages.
+• Injury / Illness: created by accidents, exposure, and failed risky tasks; treated via first aid/medical tasks.
+
+Design intent:
+• Planning matters more than reflexes.
+• Shortages create decisions rather than arbitrary punishment.
+• “Mundane” tasks must matter mechanically.
+
+3) Tasks: requirements, resolution, and outcomes
+Tasks are the action vocabulary available to the scheduler (e.g., Cooking, Water filtration, Electronics repair, Fishing, Scouting outside, Heating, Cleaning, Medical treatment, Power management, Radio communication, etc.).
+
+Each task has:
+• Time cost: how many ticks it occupies.
+• Actor requirement: who can do it (anyone, or skill-gated).
+• Tool requirements: items that must exist and be in usable condition.
+• Material inputs: consumed or partially consumed items (food, fuel, parts, water, etc.).
+• Location: inside shelter, near shelter, or outside.
+• Risk level: chance of injury, exposure, or loss.
+• Outputs: produced items, repaired condition, morale changes, knowledge/skill growth, or shelter stat changes.
+
+Outcome calculation (rule-of-thumb):
+• Base success chance modified by (a) character skill, (b) tool condition, (c) environmental pressure (cold, darkness, storm), and (d) fatigue/morale.
+• On failure: you still spend time; you may waste materials; you may damage tools; you may create a negative event (injury, fire, spoiled food, broken part).
+
+4) Items, condition, and wear
+Every item has two values: maximum condition and current (actual) condition. “Perfect condition” is when current equals maximum.
+
+Condition is a universal lever:
+• Tools (soldering iron, screwdriver set, multimeter, gun cleaning kit) lose condition when used and may reduce success chances when worn.
+• Shelter structures/furniture (tiny shelter structure, bed, water filter, fridge, barrel heater) degrade through use and time; poor condition causes efficiency penalties or safety hazards.
+• Organic items (food, fish, plants) decay via condition loss; lower condition reduces nutrition or usability and can turn into waste/spoilage outcomes.
+
+Suggested condition thresholds:
+• 80–100%: optimal
+• 50–79%: minor penalties (slightly longer task time / small failure risk)
+• 20–49%: major penalties (frequent failures / reduced output)
+• 0–19%: broken/unusable (or hazardous)
+
+Maintenance tasks convert time + parts into restored condition (general shelter chores, maintenance chores, cleaning, gunsmithing, electronics repair, diagnostics, soldering).
+
+5) Plants, hydroponics, and growth
+Plants are a special item class: each plant is identified as a kind of plant with a maximum and actual organic value. Plants produce named items.
+
+Rule expansion:
+• Seeds + Soil + Water + Planter (hydroponic planter or garden plot) create a plant instance.
+• Each day, plants tick: water and fertilizer increase organic value; cold/heat stress, lack of light, or missed watering reduce it.
+• When organic value crosses a threshold, the plant produces items (e.g., Tomato, Green bean, Chili, Garlic) and may lose some organic value (harvest stress).
+• Hydroponics maintenance stabilizes yield and reduces failure chance (pump clogs, mold, nutrient imbalance).
+
+6) Shelter systems: heat, power, water, structure
+The shelter is the “character” you’re really managing: heat, power, water, and structural condition affect safety and efficiency.
+
+Heat
+• Heat sources: campfire / fire pit / barrel heater / camp stove + firewood + lighter.
+• Heating tasks convert fuel into a shelter temperature buffer for the next ticks.
+• Low temperature increases fatigue, injury risk, and food spoilage; high temperature increases water usage and can damage some stored goods.
+
+Power
+• Power chain: solar panel → charge controller → battery → inverter → loads (LED light bank, fridge, computer, radio gear).
+• Generator + fuel can provides burst power with noise/maintenance costs.
+• Power management is a planning task that sets priorities (keep fridge on vs. run workshop tools).
+• Low power reduces productivity, increases mistakes, and harms morale (darkness, cold meals, no comms).
+
+Water
+• Water comes from collection and is made safe via filtration, stored in tanks/barrels.
+• Water quality is enforced through the task chain: unfiltered water is risky; filtered water supports cooking, hygiene, and reduced illness.
+• Missed cleaning tasks increase contamination risk and raise the daily sickness check.
+
+Structure
+• Shelter structures (train-car living compartment, treehouse structure, tiny shelter structure) have condition and can be upgraded or repaired.
+• Poor structure condition increases outside pressure (drafts, leaks), reduces heat retention, and increases accident odds during storms.
+
+7) Food: cooking, preservation, and routine
+Food exists as raw ingredients and prepared meals.
+• Cooking converts ingredients into higher-efficiency nutrition and morale buffs but costs time, water, and heat/power.
+• Preservation (drying/canning/storage containers/fridge) reduces organic decay.
+• Routine matters: consistent meal prep and cleaning reduces long-tail penalties (illness, morale drops, waste).
+
+8) Outside actions: scouting, fishing, and risk
+Outside expeditions are short, risky, and purpose-driven.
+• Scouting outside gathers information and occasional salvage but risks injury/exposure.
+• Fishing requires a dependency chain (rod, line, hooks, bait/lures, bucket/net; then fish cleaning).
+• Defensive drills (defensive shooting/combat) train readiness and reduce severity of occasional threats rather than driving constant combat.
+
+9) Morale and personalizing the shelter
+The shelter should feel increasingly personal over time, so morale is not flavor—it’s throughput.
+• Comfort items and leisure tasks (reading, socializing, watching, games, guitar, crafting, art) restore morale and slow burnout.
+• Morale influences productivity and error rate, making “mundane” choices strategically meaningful.
+
+10) Events and external pressure
+External pressure (weather, scarcity, occasional threats) forces reprioritization.
+Event rules:
+• At set intervals (daily/weekly), roll for weather and incidents.
+• Weather modifies heat/power/water costs and outside risk.
+• Incidents target weak links (low-condition tools, unmaintained power chain, poor hygiene, low morale) rather than random punishment.
+
+11) Progression and win/loss framing
+Progression comes from improved routines, tool quality, and shelter upgrades—not a traditional power fantasy.
+• Short-term success: keep everyone alive, stable, and functional for another day.
+• Medium-term success: build redundancy (extra water storage, spare battery, preserved food stock, better heat retention).
+• Long-term success: a resilient routine where shocks are survivable.
+
+Failure is typically cascading: neglected maintenance lowers condition; poor condition increases task failures; failures consume resources; scarcity hurts morale; low morale reduces output—until the routine breaks. The player’s job is to notice weak links early and spend time to stabilize them.
