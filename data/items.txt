@@ -1,26 +1,58 @@
-Guns (rifles and handguns)
+Rifle
+Pistol
+Revolver
 Guitar
 Telescope
-Solar panels
-RV/bus cutaway homes
-Train-car living compartments with bunk beds
-Treehouse/tiny shelter structures
-Beds, blankets, pillows
-Dining tables/chairs
-Food, plates, cups, cookware
-Campfire/fire pit/barrel heater
-Microwave, kettle, fridge
-Books and bookshelves
-Computers/laptops/monitors
-Game controllers/console and projector screen
-Hydroponic planters/plants
-Aquariums/fish tanks
-Water tanks/barrels
-Batteries/generators/electrical gear
-Satellite dishes/antennas/radios
-Ladders/stairs/railings/ropes
+Solar panel
+Fishing rod
+Fishing line
+Train-car living compartment
+Bunk beds
+Treehouse structure
+Tiny shelter structure
+Bed
+Blanket
+Pillow
+Dining table
+Dining chair
+Food
+Plates
+Cups
+Cookware
+Campfire
+Fire pit
+Barrel heater
+Microwave
+Kettle
+Fridge
+Books
+Bookshelves
+Computer
+Laptop
+Monitor
+Game controller
+Console
+Projector screen
+Hydroponic planter
+Plant
+Aquarium
+Fish tank
+Water tank
+Water barrel
+Battery
+Generator
+Electrical gear
+Satellite dish
+Antenna
+Radio
+Ladder
+Stair
+Railing
+Rope
 Life ring
 Tools/utility gear
-First-aid/medical boxes
-Yarn/knitting supplies
-Stuffed toys
+First-aid box
+Medical box
+Yarn
+Knitting supplie
+Stuffed toy
