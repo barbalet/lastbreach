@@ -1,58 +1,112 @@
 Rifle
 Pistol
 Revolver
+Ammunition
+Gun cleaning kit
+Gunsmith toolkit
+Screwdriver set
+Punch set
+Bench vise
+Torque driver
 Guitar
+Guitar picks
+Guitar strings
 Telescope
 Solar panel
-Fishing rod
-Fishing line
-Train-car living compartment
-Bunk beds
-Treehouse structure
-Tiny shelter structure
-Bed
-Blanket
-Pillow
-Dining table
-Dining chair
-Food
-Plates
-Cups
-Cookware
-Campfire
-Fire pit
-Barrel heater
-Microwave
-Kettle
-Fridge
-Books
-Bookshelves
-Computer
-Laptop
-Monitor
-Game controller
-Console
-Projector screen
-Hydroponic planter
-Plant
-Aquarium
-Fish tank
-Water tank
-Water barrel
+Charge controller
+Inverter
 Battery
 Generator
+Fuel can
 Electrical gear
-Satellite dish
-Antenna
-Radio
+Soldering iron
+Solder wire
+Desoldering pump
+Wire stripper
+Crimping tool
+Multimeter
+Oscilloscope (CRO)
+Fishing rod
+Fishing line
+Fishing hooks
+Fishing lures
+Bait
+Float
+Sinkers
+Fish net
+Bucket
+Fish
+Train-car living compartment
+Treehouse structure
+Tiny shelter structure
 Ladder
 Stair
 Railing
 Rope
 Life ring
-Tools/utility gear
+Bed
+Bunk beds
+Blanket
+Pillow
+Dining table
+Dining chair
+Food
+Water
+Water tank
+Water barrel
+Water filter
+Plates
+Bowls
+Cups
+Cutlery
+Cookware
+Kitchen knife
+Cutting board
+Camp stove
+Campfire
+Fire pit
+Barrel heater
+Firewood
+Lighter
+Kettle
+Microwave
+Fridge
+Food storage containers
+Books
+Bookshelves
+Computer
+Laptop
+Monitor
+Keyboard
+Mouse
+Console
+Game controller
+Projector
+Projector screen
+Hydroponic planter
+Soil
+Seeds
+Plant
+Fertilizer
+Watering can
+Aquarium
+Fish tank
+Satellite dish
+Antenna
+Radio
 First-aid box
 Medical box
 Yarn
-Knitting supplie
+Knitting supplies
+Crochet hooks
+Sewing kit
+Fabric
+Scissors
+Paint
+Paint brushes
+Canvas
+Drawing paper
+Pencils
+Tools
+Utility gear
 Stuffed toy
