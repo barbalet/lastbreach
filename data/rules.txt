@@ -1,0 +1,5 @@
+Rules
+
+Every item has a maximum and an actual condition value - be it organic or made from materials. Condition here means in perfect condition where actual condition reached maximum condition.
+
+Every plant is identified as a kind of plant with a maximum and actual organic value. Plants produce named item produces.

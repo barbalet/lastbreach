@@ -71,6 +71,7 @@ Lighter
 Kettle
 Microwave
 Fridge
+LED light bank
 Food storage containers
 Books
 Bookshelves
@@ -87,6 +88,18 @@ Hydroponic planter
 Soil
 Seeds
 Plant
+Tomato
+Green bean
+Chili
+Garlic
+Ramen
+Canned spam
+Canned tomato
+Canned corn
+Canned beans
+Canned tuna
+Jar of olives
+Jar of cheese powder
 Fertilizer
 Watering can
 Aquarium
