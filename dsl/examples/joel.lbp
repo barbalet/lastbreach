@@ -1,0 +1,94 @@
+version 0.1;
+
+character "Joel" {
+  skills {
+    cooking: 1;
+    gardening: 0;
+    medical: 1;
+    repair: 3;
+    guns: 3;
+    scouting: 2;
+    power: 2;
+  }
+
+  traits: ["pragmatic", "mechanic", "guardian"];
+
+  defaults {
+    defense_posture: "loud";
+  }
+
+  thresholds {
+    when char.hunger < 40 do task "Eating" for 1t priority 92;
+    when char.hydration < 45 do task "Eating" for 1t priority 91;
+    when char.fatigue > 80 do task "Resting" for 2t priority 95;
+    when char.injury  > 30 do task "First aid" for 1t priority 96;
+  }
+
+  plan {
+
+    block morning 0..6 {
+      if has("Battery") and (has("Solar panel") or has("Generator")) {
+        task "Power management" for 2t priority 85;
+      }
+
+      if shelter.power < 20 and (has("Multimeter") or has("Electrical gear")) {
+        task "Electrical diagnostics" for 2t priority 80;
+      }
+    }
+
+    block mid 6..14 {
+      if shelter.structure >= 60 and char.fatigue < 60 {
+        if has("Fishing rod") and has("Fishing hooks") and has("Bucket") {
+          task "Fishing" for 3t priority 70;
+          task "Fish cleaning" for 1t priority 69;
+        } else {
+          task "Scouting outside" for 3t priority 68;
+        }
+      } else {
+        task "Maintenance chores" for 2t priority 75;
+      }
+
+      if has("Soldering iron") and has("Solder wire") {
+        task "Electronics repair" for 2t priority 62;
+      }
+    }
+
+    block evening 14..20 {
+      if shelter.structure < 75 {
+        task "Maintenance chores" for 3t priority 82;
+      }
+
+      if has("Gun cleaning kit") {
+        task "Gun smithing" for 2t priority 78;
+      }
+    }
+
+    block night 20..24 {
+      task "Sleeping" for 4t priority 100;
+    }
+
+    rule "ammo_discipline" priority 90 {
+      if stock("Ammunition") < 3 {
+        set defaults.defense_posture = "quiet";
+      }
+    }
+  }
+
+  on "breach" priority 100 {
+    if stock("Ammunition") >= 2 and (has("Rifle") or has("Pistol") or has("Revolver")) {
+      task "Defensive shooting" for 3t priority 100;
+    } else {
+      task "Defensive combat" for 3t priority 99;
+    }
+
+    task "Maintenance chores" for 2t priority 98;
+
+    if has("Gun cleaning kit") {
+      task "Gun smithing" for 2t priority 97;
+    }
+
+    if char.fatigue > 70 or char.injury > 25 {
+      task "Resting" for 2t priority 96;
+    }
+  }
+}

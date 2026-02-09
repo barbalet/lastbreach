@@ -1,0 +1,104 @@
+version 0.1;
+
+character "Mara" {
+  skills {
+    cooking: 3;
+    gardening: 2;
+    medical: 2;
+    repair: 1;
+    guns: 1;
+    scouting: 0;
+  }
+
+  traits: ["cautious", "tidy", "routine_builder"];
+
+  defaults {
+    defense_posture: "quiet";
+  }
+
+  thresholds {
+    when char.hunger < 45 do task "Eating" for 1t priority 95;
+    when char.hydration < 50 do task "Eating" for 1t priority 94;
+    when char.fatigue > 75 do task "Resting" for 2t priority 93;
+    when char.illness > 25 do task "Medical treatment" for 2t priority 98;
+    when char.injury  > 25 do task "First aid" for 1t priority 97;
+  }
+
+  plan {
+
+    block morning 0..6 {
+      if shelter.water_safe < 6 and has("Water filter") {
+        task "Water filtration" for 2t using { "Water filter": 1; } priority 90;
+      }
+
+      if stock("Food") > 2 {
+        task "Meal prep" for 2t priority 80;
+        task "Cooking"  for 2t priority 79;
+      }
+
+      if shelter.contamination > 25 {
+        task "Cleaning" for 2t priority 78;
+      }
+    }
+
+    block mid 6..14 {
+      if has("Hydroponic planter") and (stock("Seeds") > 0 or stock("Plant") > 0) {
+        task "Watering plants" for 1t priority 70;
+        task "Hydroponics maintenance" for 2t priority 69;
+      }
+
+      if char.morale < 45 and has("Books") {
+        task "Reading" for 1t priority 60;
+      } else if char.morale < 45 {
+        task "Talking" for 1t priority 59;
+      }
+
+      task "General shelter chores" for 2t priority 55;
+    }
+
+    block evening 14..20 {
+      if has("Food storage containers") {
+        task "Food preservation" for 2t priority 65;
+      }
+
+      if char.morale < 60 {
+        task "Socializing" for 1t priority 58;
+      }
+
+      if shelter.structure < 70 {
+        task "Maintenance chores" for 2t priority 72;
+      }
+    }
+
+    block night 20..24 {
+      task "Sleeping" for 4t priority 100;
+    }
+
+    rule "cold_buffer" priority 85 {
+      if shelter.temp_c < 2.0 {
+        if has("Barrel heater") and stock("Firewood") > 0 {
+          task "Heating" for 2t priority 85;
+        } else {
+          task "Tending a fire" for 2t priority 80;
+        }
+      }
+    }
+  }
+
+  on "breach" priority 99 {
+    if breach.level >= 2 and stock("Ammunition") < 4 {
+      task "Defensive combat" for 2t priority 88;
+    }
+
+    task "Cleaning" for 2t priority 96;
+    task "Maintenance chores" for 2t priority 95;
+
+    if has("Gun cleaning kit") {
+      task "Gun smithing" for 2t priority 94;
+    }
+
+    if char.fatigue > 60 or char.morale < 45 {
+      task "Resting" for 2t priority 93;
+    }
+  }
+}

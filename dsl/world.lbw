@@ -1,0 +1,55 @@
+version 0.1;
+
+world "Default Shelter - Coastal Edge" {
+  constants {
+    DAY_TICKS: 24;
+  }
+
+  shelter {
+    temp_c: 6.0;
+    signature: 10.0;
+    power: 35.0;
+    water_safe: 6.0;
+    water_raw: 10.0;
+    structure: 78.0;
+    contamination: 12.0;
+  }
+
+  inventory {
+    "Food": qty 10;
+    "Water filter": qty 1, cond 80;
+    "Gun cleaning kit": qty 1, cond 75;
+    "Rifle": qty 1, cond 70;
+    "Ammunition": qty 8;
+
+    "Battery": qty 1, cond 85;
+    "Solar panel": qty 1, cond 80;
+    "Multimeter": qty 1, cond 90;
+
+    "Firewood": qty 10;
+    "Barrel heater": qty 1, cond 60;
+
+    "Hydroponic planter": qty 1, cond 70;
+    "Seeds": qty 4;
+
+    "Books": qty 2;
+    "Food storage containers": qty 3;
+
+    "Fishing rod": qty 1, cond 65;
+    "Fishing hooks": qty 6;
+    "Bucket": qty 1, cond 75;
+
+    "Soldering iron": qty 1, cond 60;
+    "Solder wire": qty 2;
+  }
+
+  weather {
+    storminess: 0.15;
+    outside_temp_c: 5.0;
+  }
+
+  events {
+    daily "breach" chance 18%;
+    overnight_threat_check chance 25%;
+  }
+}

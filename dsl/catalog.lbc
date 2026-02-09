@@ -1,0 +1,285 @@
+# catalog.lbc - sample task/item definitions referenced by mara.lbp and joel.lbp
+
+# ---- Items (minimal metadata; extend freely) ----
+itemdef "Food" { stackable: true; tags: ["consumable"]; }
+itemdef "Ammunition" { stackable: true; tags: ["ammo"]; }
+itemdef "Water filter" { max_condition: 100; stackable: false; tags: ["tool"]; }
+itemdef "Gun cleaning kit" { max_condition: 100; stackable: false; tags: ["tool"]; }
+itemdef "Rifle" { max_condition: 100; stackable: false; tags: ["weapon"]; }
+itemdef "Battery" { max_condition: 100; stackable: false; tags: ["power"]; }
+itemdef "Solar panel" { max_condition: 100; stackable: false; tags: ["power"]; }
+itemdef "Multimeter" { max_condition: 100; stackable: false; tags: ["tool","electrical"]; }
+itemdef "Firewood" { stackable: true; tags: ["fuel"]; }
+itemdef "Barrel heater" { max_condition: 100; stackable: false; tags: ["heat"]; }
+itemdef "Hydroponic planter" { max_condition: 100; stackable: false; tags: ["garden"]; }
+itemdef "Seeds" { stackable: true; tags: ["garden"]; }
+itemdef "Books" { stackable: true; tags: ["morale"]; }
+itemdef "Food storage containers" { stackable: true; tags: ["storage"]; }
+itemdef "Fishing rod" { max_condition: 100; stackable: false; tags: ["tool","outside"]; }
+itemdef "Fishing hooks" { stackable: true; tags: ["tool","outside"]; }
+itemdef "Bucket" { max_condition: 100; stackable: false; tags: ["tool"]; }
+itemdef "Soldering iron" { max_condition: 100; stackable: false; tags: ["tool","electrical"]; }
+itemdef "Solder wire" { stackable: true; tags: ["material","electrical"]; }
+
+# ---- Tasks (timing + stations; extend with consumes/produces/effects) ----
+
+taskdef "Eating" {
+  time: 1t;
+  location: inside;
+  risk: none;
+  station: kitchen;
+  base_success: 95%;
+  consumes: { "Food": 1; };
+  effects: { hunger: +20; hydration: +10; morale: +2; fatigue: +1; };
+}
+
+taskdef "Resting" {
+  time: 2t;
+  location: inside;
+  risk: none;
+  station: cot;
+  base_success: 100%;
+  effects: { fatigue: -18; morale: +1; };
+}
+
+taskdef "Sleeping" {
+  time: 4t;
+  location: inside;
+  risk: none;
+  station: cot;
+  base_success: 100%;
+  effects: { fatigue: -40; morale: +2; };
+}
+
+taskdef "Water filtration" {
+  time: 2t;
+  location: inside;
+  risk: low;
+  station: wash;
+  base_success: 85%;
+  requires_tools: ["Water filter"];
+}
+
+taskdef "Meal prep" {
+  time: 2t;
+  location: inside;
+  risk: low;
+  station: kitchen;
+  base_success: 85%;
+  effects: { morale: +1; fatigue: +2; };
+}
+
+taskdef "Cooking" {
+  time: 2t;
+  location: inside;
+  risk: low;
+  station: kitchen;
+  base_success: 80%;
+  effects: { morale: +2; fatigue: +2; };
+}
+
+taskdef "Cleaning" {
+  time: 2t;
+  location: inside;
+  risk: low;
+  station: wash;
+  base_success: 90%;
+}
+
+taskdef "General shelter chores" {
+  time: 2t;
+  location: inside;
+  risk: low;
+  station: chores;
+  base_success: 90%;
+  effects: { fatigue: +2; };
+}
+
+taskdef "Maintenance chores" {
+  time: 2t;
+  location: inside;
+  risk: med;
+  station: workshop;
+  base_success: 75%;
+  effects: { fatigue: +3; };
+}
+
+taskdef "Gun smithing" {
+  time: 2t;
+  location: inside;
+  risk: low;
+  station: workshop;
+  base_success: 80%;
+  requires_tools: ["Gun cleaning kit"];
+}
+
+taskdef "Power management" {
+  time: 2t;
+  location: inside;
+  risk: low;
+  station: power;
+  base_success: 85%;
+  effects: { fatigue: +2; };
+}
+
+taskdef "Electrical diagnostics" {
+  time: 2t;
+  location: inside;
+  risk: med;
+  station: power;
+  base_success: 75%;
+  requires_tools: ["Multimeter"];
+  effects: { fatigue: +3; };
+}
+
+taskdef "Electronics repair" {
+  time: 2t;
+  location: inside;
+  risk: med;
+  station: workshop;
+  base_success: 70%;
+  requires_tools: ["Soldering iron"];
+  consumes: { "Solder wire": 1; };
+  effects: { fatigue: +3; };
+}
+
+taskdef "Watering plants" {
+  time: 1t;
+  location: inside;
+  risk: none;
+  station: hydroponics;
+  base_success: 95%;
+  effects: { morale: +1; fatigue: +1; };
+}
+
+taskdef "Hydroponics maintenance" {
+  time: 2t;
+  location: inside;
+  risk: low;
+  station: hydroponics;
+  base_success: 80%;
+  effects: { fatigue: +2; };
+}
+
+taskdef "Reading" {
+  time: 1t;
+  location: inside;
+  risk: none;
+  station: lounge;
+  base_success: 100%;
+  effects: { morale: +4; fatigue: -1; };
+}
+
+taskdef "Talking" {
+  time: 1t;
+  location: inside;
+  risk: none;
+  station: lounge;
+  base_success: 100%;
+  effects: { morale: +3; };
+}
+
+taskdef "Socializing" {
+  time: 1t;
+  location: inside;
+  risk: none;
+  station: lounge;
+  base_success: 100%;
+  effects: { morale: +3; };
+}
+
+taskdef "Food preservation" {
+  time: 2t;
+  location: inside;
+  risk: low;
+  station: kitchen;
+  base_success: 75%;
+  requires_tools: ["Food storage containers"];
+  effects: { fatigue: +2; };
+}
+
+taskdef "Heating" {
+  time: 2t;
+  location: inside;
+  risk: low;
+  station: heat;
+  base_success: 85%;
+  requires_tools: ["Barrel heater"];
+  consumes: { "Firewood": 1; };
+}
+
+taskdef "Tending a fire" {
+  time: 2t;
+  location: near;
+  risk: med;
+  station: heat;
+  base_success: 75%;
+  consumes: { "Firewood": 1; };
+  effects: { fatigue: +3; };
+}
+
+taskdef "Scouting outside" {
+  time: 3t;
+  location: outside;
+  risk: high;
+  station: outside;
+  base_success: 55%;
+  effects: { fatigue: +6; morale: -1; };
+}
+
+taskdef "Fishing" {
+  time: 3t;
+  location: outside;
+  risk: high;
+  station: outside;
+  base_success: 60%;
+  requires_tools: ["Fishing rod"];
+  consumes: { "Fishing hooks": 1; };
+  effects: { fatigue: +6; };
+}
+
+taskdef "Fish cleaning" {
+  time: 1t;
+  location: inside;
+  risk: low;
+  station: kitchen;
+  base_success: 85%;
+  effects: { fatigue: +1; };
+}
+
+taskdef "Defensive shooting" {
+  time: 3t;
+  location: near;
+  risk: high;
+  station: defense;
+  base_success: 70%;
+  consumes: { "Ammunition": 2; };
+  effects: { fatigue: +6; };
+}
+
+taskdef "Defensive combat" {
+  time: 3t;
+  location: near;
+  risk: high;
+  station: defense;
+  base_success: 60%;
+  effects: { fatigue: +6; injury: +2; };
+}
+
+taskdef "First aid" {
+  time: 1t;
+  location: inside;
+  risk: low;
+  station: med;
+  base_success: 80%;
+  effects: { injury: -10; morale: +1; fatigue: +1; };
+}
+
+taskdef "Medical treatment" {
+  time: 2t;
+  location: inside;
+  risk: low;
+  station: med;
+  base_success: 75%;
+  effects: { illness: -12; morale: +1; fatigue: +2; };
+}
