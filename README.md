@@ -53,6 +53,38 @@ These files are intended to seed balancing and simulation rules.
 - Support item dependencies for specialized tasks (for example: fishing needs bait/hooks/fish handling gear; electronics work needs tools like multimeter and soldering iron).
 - Add progression via improved routines, tool quality, and shelter upgrades.
 
+## Runner
+
+I’ll package a standalone C99 runner (no third-party libs) that parses .lbp plans and optionally .lbc (catalog) + .lbw (world), then runs a tick/day simulation printing time-cycle and event output (e.g., breaches, overnight checks, task starts/completions, station conflicts).
+
+### Build
+
+``make``
+
+### Run
+
+``./lastbreach joel.lbp mara.lbp --days 3 --seed 123``
+
+### Optional inputs:
+
+``./lastbreach joel.lbp mara.lbp --world world.lbw --catalog catalog.lbc --days 2``
+
+### Output you’ll see
+
+Per day header (shelter state + breach chance)
+
+Per tick:
+
+EVENT: BREACH level=N! (if it happens)
+
+EVENT: overnight_threat_check (end of day)
+
+Task starts / continues / completes
+
+Station conflicts (if both try the same station)
+
+Updated stats lines per character
+
 ## Roadmap
 
 1. Define data schema for tasks/items with explicit dependencies.
