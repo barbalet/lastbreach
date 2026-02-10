@@ -68,15 +68,15 @@ VEC_DECL(VecStmtPtr, Stmt *);
 /* -------------------------------------------------------------------------- */
 
 typedef struct {
-  char *key;        /* item kind, e.g. "water_filter" */
-  double qty;       /* quantity in stock (unit depends on DSL) */
-  double best_cond; /* best observed condition (0–100) */
+    char *key;        /* item kind, e.g. "water_filter" */
+    double qty;       /* quantity in stock (unit depends on DSL) */
+    double best_cond; /* best observed condition (0–100) */
 } ItemEntry;
 
 VEC_DECL(VecItemEntry, ItemEntry);
 
 typedef struct {
-  VecItemEntry items;
+    VecItemEntry items;
 } Inventory;
 
 void inv_init(Inventory *inv);
@@ -88,15 +88,15 @@ double inv_cond(Inventory *inv, const char *key);
 
 /* Tasks are referenced by name from character scripts and rules. */
 typedef struct {
-  char *name;
-  int time_ticks; /* default duration if the script doesn't override it */
-  char *station;  /* optional station label, e.g. "workshop" */
+    char *name;
+    int time_ticks; /* default duration if the script doesn't override it */
+    char *station;  /* optional station label, e.g. "workshop" */
 } TaskDef;
 
 VEC_DECL(VecTaskDef, TaskDef);
 
 typedef struct {
-  VecTaskDef tasks;
+    VecTaskDef tasks;
 } Catalog;
 
 void cat_init(Catalog *c);
@@ -105,24 +105,24 @@ TaskDef *cat_get_or_add_task(Catalog *c, const char *name);
 
 /* The "world" is the shared state that both characters operate within. */
 typedef struct {
-  double temp_c;
-  double signature;
-  double power;
-  double water_safe;
-  double water_raw;
-  double structure;
-  double contamination;
+    double temp_c;
+    double signature;
+    double power;
+    double water_safe;
+    double water_raw;
+    double structure;
+    double contamination;
 } Shelter;
 
 typedef struct {
-  double breach_chance;
-  double overnight_chance;
+    double breach_chance;
+    double overnight_chance;
 } WorldEvents;
 
 typedef struct {
-  Shelter shelter;
-  Inventory inv;
-  WorldEvents events;
+    Shelter shelter;
+    Inventory inv;
+    WorldEvents events;
 } World;
 
 void world_init(World *w);
@@ -132,59 +132,59 @@ void world_init(World *w);
 /* -------------------------------------------------------------------------- */
 
 typedef enum {
-  TK_EOF = 0,
-  TK_IDENT,
-  TK_STRING,
-  TK_NUMBER,
-  TK_PERCENT,
-  TK_DURATION,
+    TK_EOF = 0,
+    TK_IDENT,
+    TK_STRING,
+    TK_NUMBER,
+    TK_PERCENT,
+    TK_DURATION,
 
-  TK_LBRACE,
-  TK_RBRACE,
-  TK_LPAREN,
-  TK_RPAREN,
-  TK_LBRACK,
-  TK_RBRACK,
+    TK_LBRACE,
+    TK_RBRACE,
+    TK_LPAREN,
+    TK_RPAREN,
+    TK_LBRACK,
+    TK_RBRACK,
 
-  TK_COLON,
-  TK_SEMI,
-  TK_COMMA,
-  TK_DOT,
-  TK_DOTDOT,
-  TK_ASSIGN,
+    TK_COLON,
+    TK_SEMI,
+    TK_COMMA,
+    TK_DOT,
+    TK_DOTDOT,
+    TK_ASSIGN,
 
-  TK_PLUS,
-  TK_MINUS,
-  TK_STAR,
-  TK_SLASH,
+    TK_PLUS,
+    TK_MINUS,
+    TK_STAR,
+    TK_SLASH,
 
-  TK_EQ,
-  TK_NEQ,
-  TK_LT,
-  TK_LTE,
-  TK_GT,
-  TK_GTE
+    TK_EQ,
+    TK_NEQ,
+    TK_LT,
+    TK_LTE,
+    TK_GT,
+    TK_GTE
 } TokenKind;
 
 typedef struct {
-  TokenKind kind;
-  int line;
-  const char *start;
-  int len;
+    TokenKind kind;
+    int line;
+    const char *start;
+    int len;
 
-  /* Parsed numeric value, when kind indicates a numeric token. */
-  double num;
+    /* Parsed numeric value, when kind indicates a numeric token. */
+    double num;
 
-  /* Parsed tick count for duration tokens (e.g. "2h", "1d"). */
-  int iticks;
+    /* Parsed tick count for duration tokens (e.g. "2h", "1d"). */
+    int iticks;
 } Token;
 
 typedef struct {
-  char *src;
-  size_t len;
-  size_t pos;
-  int line;
-  Token cur;
+    char *src;
+    size_t len;
+    size_t pos;
+    int line;
+    Token cur;
 } Lexer;
 
 void lx_next_token(Lexer *lx);
@@ -197,155 +197,155 @@ char *tk_cstr(const Token *t);
 typedef enum { EX_NUM, EX_BOOL, EX_STRING, EX_VAR, EX_CALL, EX_UNARY, EX_BINARY } ExprKind;
 
 typedef enum {
-  OP_ADD,
-  OP_SUB,
-  OP_MUL,
-  OP_DIV,
+    OP_ADD,
+    OP_SUB,
+    OP_MUL,
+    OP_DIV,
 
-  OP_EQ,
-  OP_NEQ,
-  OP_LT,
-  OP_LTE,
-  OP_GT,
-  OP_GTE,
+    OP_EQ,
+    OP_NEQ,
+    OP_LT,
+    OP_LTE,
+    OP_GT,
+    OP_GTE,
 
-  OP_AND,
-  OP_OR,
+    OP_AND,
+    OP_OR,
 
-  OP_NEG, /* unary '-' */
-  OP_NOT  /* unary 'not' */
+    OP_NEG, /* unary '-' */
+    OP_NOT  /* unary 'not' */
 } OpKind;
 
 typedef struct {
-  char *name;
-  VecExprPtr args;
+    char *name;
+    VecExprPtr args;
 } CallExpr;
 
 struct Expr {
-  ExprKind kind;
-  int line;
+    ExprKind kind;
+    int line;
 
-  union {
-    double num;
-    int boolean;
-    char *str;
-    char *var;
-    CallExpr call;
+    union {
+        double num;
+        int boolean;
+        char *str;
+        char *var;
+        CallExpr call;
 
-    struct {
-      OpKind op;
-      Expr *a;
-    } un;
+        struct {
+            OpKind op;
+            Expr *a;
+        } un;
 
-    struct {
-      OpKind op;
-      Expr *a;
-      Expr *b;
-    } bin;
-  } u;
+        struct {
+            OpKind op;
+            Expr *a;
+            Expr *b;
+        } bin;
+    } u;
 };
 
 /* Statements are the executable nodes of rules/blocks. */
 typedef enum { ST_LET, ST_IF, ST_TASK, ST_SET, ST_YIELD, ST_STOP } StmtKind;
 
 typedef struct {
-  char *name;
-  Expr *value;
+    char *name;
+    Expr *value;
 } LetStmt;
 
 typedef struct {
-  Expr *cond;
-  VecStmtPtr then_stmts;
-  VecStmtPtr else_stmts;
+    Expr *cond;
+    VecStmtPtr then_stmts;
+    VecStmtPtr else_stmts;
 } IfStmt;
 
 typedef struct {
-  char *task_name;
-  Expr *for_ticks;
-  Expr *priority;
+    char *task_name;
+    Expr *for_ticks;
+    Expr *priority;
 } TaskStmt;
 
 typedef struct {
-  char *lhs;
-  Expr *rhs;
+    char *lhs;
+    Expr *rhs;
 } SetStmt;
 
 struct Stmt {
-  StmtKind kind;
-  int line;
+    StmtKind kind;
+    int line;
 
-  union {
-    LetStmt let_;
-    IfStmt if_;
-    TaskStmt task;
-    SetStmt set_;
-  } u;
+    union {
+        LetStmt let_;
+        IfStmt if_;
+        TaskStmt task;
+        SetStmt set_;
+    } u;
 };
 
 /* Rule types used by Character. */
 typedef struct {
-  Expr *cond;
-  Stmt *action;
+    Expr *cond;
+    Stmt *action;
 } ThresholdRule;
 
 VEC_DECL(VecThreshold, ThresholdRule);
 
 typedef struct {
-  char *name;
-  int start_tick;
-  int end_tick;
-  VecStmtPtr stmts;
+    char *name;
+    int start_tick;
+    int end_tick;
+    VecStmtPtr stmts;
 } BlockRule;
 
 VEC_DECL(VecBlockRule, BlockRule);
 
 typedef struct {
-  char *label;
-  double priority;
-  VecStmtPtr stmts;
+    char *label;
+    double priority;
+    VecStmtPtr stmts;
 } GenericRule;
 
 VEC_DECL(VecGenericRule, GenericRule);
 
 typedef struct {
-  char *event_name;
-  double priority;
-  Expr *when_cond;
-  VecStmtPtr stmts;
+    char *event_name;
+    double priority;
+    Expr *when_cond;
+    VecStmtPtr stmts;
 } OnEventRule;
 
 VEC_DECL(VecOnEventRule, OnEventRule);
 
 /* A playable character defined by an .lbp script plus runtime task state. */
 typedef struct {
-  char *name;
+    char *name;
 
-  /* Vitals (0–100 ranges, unless DSL defines otherwise). */
-  double hunger;
-  double hydration;
-  double fatigue;
-  double morale;
-  double injury;
-  double illness;
+    /* Vitals (0–100 ranges, unless DSL defines otherwise). */
+    double hunger;
+    double hydration;
+    double fatigue;
+    double morale;
+    double injury;
+    double illness;
 
-  char *defense_posture; /* "quiet" or "loud" */
+    char *defense_posture; /* "quiet" or "loud" */
 
-  /* Skills and traits: arbitrary keys defined by the DSL. */
-  VecStr skill_keys;
-  VecDbl skill_vals;
-  VecStr traits;
+    /* Skills and traits: arbitrary keys defined by the DSL. */
+    VecStr skill_keys;
+    VecDbl skill_vals;
+    VecStr traits;
 
-  /* Rules declared in the script. */
-  VecThreshold thresholds;
-  VecBlockRule blocks;
-  VecGenericRule rules;
-  VecOnEventRule on_events;
+    /* Rules declared in the script. */
+    VecThreshold thresholds;
+    VecBlockRule blocks;
+    VecGenericRule rules;
+    VecOnEventRule on_events;
 
-  /* Runtime-only fields (simulation state). */
-  const char *rt_task;
-  const char *rt_station;
-  int rt_remaining;
-  double rt_priority;
+    /* Runtime-only fields (simulation state). */
+    const char *rt_task;
+    const char *rt_station;
+    int rt_remaining;
+    double rt_priority;
 } Character;
 
 void character_init(Character *c);
@@ -355,8 +355,8 @@ void character_init(Character *c);
 /* -------------------------------------------------------------------------- */
 
 typedef struct {
-  const char *filename;
-  Lexer lx;
+    const char *filename;
+    Lexer lx;
 } Parser;
 
 void ps_init(Parser *ps, const char *filename, char *src);
