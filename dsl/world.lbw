@@ -31,6 +31,11 @@ world "Default Shelter - Coastal Edge" {
 
     "Hydroponic planter": qty 1, cond 70;
     "Seeds": qty 4;
+    "Soil": qty 4;
+    "Fertilizer": qty 2;
+    "Plant": qty 1, cond 80;
+    "Watering can": qty 1, cond 75;
+    "Tomato": qty 1;
 
     "Books": qty 2;
     "Food storage containers": qty 3;

@@ -43,6 +43,9 @@ character "Mara" {
 
     block mid 6..14 {
       if has("Hydroponic planter") and (stock("Seeds") > 0 or stock("Plant") > 0) {
+        if stock("Plant") < 1 and stock("Seeds") > 0 and stock("Soil") > 0 {
+          task "Gardening" for 2t priority 71;
+        }
         task "Watering plants" for 1t priority 70;
         task "Hydroponics maintenance" for 2t priority 69;
       }

@@ -283,3 +283,202 @@ taskdef "Medical treatment" {
   base_success: 75%;
   effects: { illness: -12; morale: +1; fatigue: +2; };
 }
+
+# ---- Additional canonical items from data/items.txt ----
+itemdef "Pistol" { tags: ["catalog"]; }
+itemdef "Revolver" { tags: ["catalog"]; }
+itemdef "Gunsmith toolkit" { tags: ["catalog"]; }
+itemdef "Screwdriver set" { tags: ["catalog"]; }
+itemdef "Punch set" { tags: ["catalog"]; }
+itemdef "Bench vise" { tags: ["catalog"]; }
+itemdef "Torque driver" { tags: ["catalog"]; }
+itemdef "Guitar" { tags: ["catalog"]; }
+itemdef "Guitar picks" { tags: ["catalog"]; }
+itemdef "Guitar strings" { tags: ["catalog"]; }
+itemdef "Telescope" { tags: ["catalog"]; }
+itemdef "Charge controller" { tags: ["catalog"]; }
+itemdef "Inverter" { tags: ["catalog"]; }
+itemdef "Baseball bat" { tags: ["catalog"]; }
+itemdef "Generator" { tags: ["catalog"]; }
+itemdef "Fuel can" { tags: ["catalog"]; }
+itemdef "Electrical gear" { tags: ["catalog"]; }
+itemdef "Desoldering pump" { tags: ["catalog"]; }
+itemdef "Wire stripper" { tags: ["catalog"]; }
+itemdef "Crimping tool" { tags: ["catalog"]; }
+itemdef "Oscilloscope (CRO)" { tags: ["catalog"]; }
+itemdef "Fishing line" { tags: ["catalog"]; }
+itemdef "Fishing lures" { tags: ["catalog"]; }
+itemdef "Bait" { tags: ["catalog"]; }
+itemdef "Float" { tags: ["catalog"]; }
+itemdef "Sinkers" { tags: ["catalog"]; }
+itemdef "Fish net" { tags: ["catalog"]; }
+itemdef "Fish" { tags: ["catalog"]; }
+itemdef "Train-car living compartment" { tags: ["catalog"]; }
+itemdef "Treehouse structure" { tags: ["catalog"]; }
+itemdef "Tiny shelter structure" { tags: ["catalog"]; }
+itemdef "Ladder" { tags: ["catalog"]; }
+itemdef "Stair" { tags: ["catalog"]; }
+itemdef "Railing" { tags: ["catalog"]; }
+itemdef "Rope" { tags: ["catalog"]; }
+itemdef "Life ring" { tags: ["catalog"]; }
+itemdef "Bed" { tags: ["catalog"]; }
+itemdef "Bunk beds" { tags: ["catalog"]; }
+itemdef "Blanket" { tags: ["catalog"]; }
+itemdef "Pillow" { tags: ["catalog"]; }
+itemdef "Dining table" { tags: ["catalog"]; }
+itemdef "Dining chair" { tags: ["catalog"]; }
+itemdef "Water" { tags: ["catalog"]; }
+itemdef "Water tank" { tags: ["catalog"]; }
+itemdef "Water barrel" { tags: ["catalog"]; }
+itemdef "Plates" { tags: ["catalog"]; }
+itemdef "Bowls" { tags: ["catalog"]; }
+itemdef "Cups" { tags: ["catalog"]; }
+itemdef "Cutlery" { tags: ["catalog"]; }
+itemdef "Cookware" { tags: ["catalog"]; }
+itemdef "Kitchen knife" { tags: ["catalog"]; }
+itemdef "Cutting board" { tags: ["catalog"]; }
+itemdef "Camp stove" { tags: ["catalog"]; }
+itemdef "Campfire" { tags: ["catalog"]; }
+itemdef "Fire pit" { tags: ["catalog"]; }
+itemdef "Lighter" { tags: ["catalog"]; }
+itemdef "Kettle" { tags: ["catalog"]; }
+itemdef "Microwave" { tags: ["catalog"]; }
+itemdef "Fridge" { tags: ["catalog"]; }
+itemdef "LED light bank" { tags: ["catalog"]; }
+itemdef "Bookshelves" { tags: ["catalog"]; }
+itemdef "Computer" { tags: ["catalog"]; }
+itemdef "Laptop" { tags: ["catalog"]; }
+itemdef "Monitor" { tags: ["catalog"]; }
+itemdef "Keyboard" { tags: ["catalog"]; }
+itemdef "Mouse" { tags: ["catalog"]; }
+itemdef "Console" { tags: ["catalog"]; }
+itemdef "Game controller" { tags: ["catalog"]; }
+itemdef "Projector" { tags: ["catalog"]; }
+itemdef "Projector screen" { tags: ["catalog"]; }
+itemdef "Soil" { tags: ["catalog"]; }
+itemdef "Plant" { tags: ["catalog"]; }
+itemdef "Tomato" { tags: ["catalog"]; }
+itemdef "Green bean" { tags: ["catalog"]; }
+itemdef "Chili" { tags: ["catalog"]; }
+itemdef "Garlic" { tags: ["catalog"]; }
+itemdef "Ramen" { tags: ["catalog"]; }
+itemdef "Canned spam" { tags: ["catalog"]; }
+itemdef "Canned tomato" { tags: ["catalog"]; }
+itemdef "Canned corn" { tags: ["catalog"]; }
+itemdef "Canned beans" { tags: ["catalog"]; }
+itemdef "Canned tuna" { tags: ["catalog"]; }
+itemdef "Jar of olives" { tags: ["catalog"]; }
+itemdef "Jar of cheese powder" { tags: ["catalog"]; }
+itemdef "Fertilizer" { tags: ["catalog"]; }
+itemdef "Watering can" { tags: ["catalog"]; }
+itemdef "Aquarium" { tags: ["catalog"]; }
+itemdef "Fish tank" { tags: ["catalog"]; }
+itemdef "Satellite dish" { tags: ["catalog"]; }
+itemdef "Antenna" { tags: ["catalog"]; }
+itemdef "Radio" { tags: ["catalog"]; }
+itemdef "First-aid box" { tags: ["catalog"]; }
+itemdef "Medical box" { tags: ["catalog"]; }
+itemdef "Yarn" { tags: ["catalog"]; }
+itemdef "Knitting supplies" { tags: ["catalog"]; }
+itemdef "Crochet hooks" { tags: ["catalog"]; }
+itemdef "Sewing kit" { tags: ["catalog"]; }
+itemdef "Fabric" { tags: ["catalog"]; }
+itemdef "Scissors" { tags: ["catalog"]; }
+itemdef "Paint" { tags: ["catalog"]; }
+itemdef "Paint brushes" { tags: ["catalog"]; }
+itemdef "Canvas" { tags: ["catalog"]; }
+itemdef "Drawing paper" { tags: ["catalog"]; }
+itemdef "Pencils" { tags: ["catalog"]; }
+itemdef "Tools" { tags: ["catalog"]; }
+itemdef "Utility gear" { tags: ["catalog"]; }
+itemdef "Stuffed toy" { tags: ["catalog"]; }
+itemdef "Turntable" { tags: ["catalog"]; }
+itemdef "Amplifier" { tags: ["catalog"]; }
+itemdef "Vinyl record" { tags: ["catalog"]; }
+itemdef "Drums" { tags: ["catalog"]; }
+
+# ---- Additional canonical tasks from data/tasks.txt ----
+taskdef "Watching" {
+  time: 1t;
+  station: lounge;
+}
+
+taskdef "Computer work" {
+  time: 2t;
+  station: comms;
+}
+
+taskdef "Playing video games" {
+  time: 1t;
+  station: lounge;
+}
+
+taskdef "Playing guitar" {
+  time: 1t;
+  station: lounge;
+}
+
+taskdef "Knitting" {
+  time: 2t;
+  station: craft;
+}
+
+taskdef "Crocheting" {
+  time: 2t;
+  station: craft;
+}
+
+taskdef "Sewing" {
+  time: 2t;
+  station: craft;
+}
+
+taskdef "Crafting" {
+  time: 2t;
+  station: workshop;
+}
+
+taskdef "Painting" {
+  time: 2t;
+  station: craft;
+}
+
+taskdef "Drawing" {
+  time: 1t;
+  station: craft;
+}
+
+taskdef "Gardening" {
+  time: 2t;
+  station: hydroponics;
+}
+
+taskdef "Aquarium maintenance" {
+  time: 2t;
+  station: aquarium;
+}
+
+taskdef "Swimming" {
+  time: 2t;
+  station: outside;
+}
+
+taskdef "Telescope use" {
+  time: 1t;
+  station: outside;
+}
+
+taskdef "Soldering" {
+  time: 2t;
+  station: workshop;
+}
+
+taskdef "Radio communication" {
+  time: 1t;
+  station: comms;
+}
+
+taskdef "Water collection" {
+  time: 2t;
+  station: outside;
+}

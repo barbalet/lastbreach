@@ -123,6 +123,10 @@ typedef struct {
     Shelter shelter;
     Inventory inv;
     WorldEvents events;
+    double hydroponic_health;
+    int plants_watered_today;
+    int hydroponics_maintained_today;
+    double cooked_food_portions;
 } World;
 
 void world_init(World *w);

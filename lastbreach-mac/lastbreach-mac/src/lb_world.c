@@ -23,4 +23,8 @@ void world_init(World *w) {
     inv_init(&w->inv);
     w->events.breach_chance = 15.0;
     w->events.overnight_chance = 25.0;
+    w->hydroponic_health = 55.0;
+    w->plants_watered_today = 0;
+    w->hydroponics_maintained_today = 0;
+    w->cooked_food_portions = 0.0;
 }
