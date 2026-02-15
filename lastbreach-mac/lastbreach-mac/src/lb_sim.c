@@ -15,6 +15,19 @@ typedef struct {
 } DayEvents;
 
 typedef struct {
+    char *task_name;
+    int count;
+} TaskCount;
+
+typedef struct {
+    TaskCount *tasks;
+    int n;
+    int cap;
+    int idle_ticks;
+    int conflict_yields;
+} AgentDiagnostics;
+
+typedef struct {
     const char *name;
     double hunger;
     double hydration;
@@ -84,6 +97,279 @@ static const char *kPlantProduce[] = {
     "Chili",
     "Garlic"
 };
+
+static void diag_init(AgentDiagnostics *d) {
+    memset(d, 0, sizeof(*d));
+}
+
+static void diag_free(AgentDiagnostics *d) {
+    for (int i = 0; i<d->n; i++) free(d->tasks[i].task_name);
+    free(d->tasks);
+    memset(d, 0, sizeof(*d));
+}
+
+static int diag_index_of(const AgentDiagnostics *d, const char *task_name) {
+    for (int i = 0; i<d->n; i++) {
+        if (strcmp(d->tasks[i].task_name, task_name)==0) return i;
+    }
+    return -1;
+}
+
+static void diag_record_completion(AgentDiagnostics *d, const char *task_name) {
+    if (!task_name) return;
+    int idx = diag_index_of(d, task_name);
+    if (idx >= 0) {
+        d->tasks[idx].count++;
+        return;
+    }
+    if (d->n == d->cap) {
+        d->cap = d->cap ? d->cap*2 : 8;
+        d->tasks = xrealloc(d->tasks, (size_t)d->cap*sizeof(*d->tasks));
+    }
+    d->tasks[d->n].task_name = xstrdup(task_name);
+    d->tasks[d->n].count = 1;
+    d->n++;
+}
+
+static int diag_task_count(const AgentDiagnostics *d, const char *task_name) {
+    int idx = diag_index_of(d, task_name);
+    if (idx < 0) return 0;
+    return d->tasks[idx].count;
+}
+
+static int diag_total_completions(const AgentDiagnostics *d) {
+    int total = 0;
+    for (int i = 0; i<d->n; i++) total += d->tasks[i].count;
+    return total;
+}
+
+static int vecstr_contains(const VecStr *v, const char *s) {
+    for (int i = 0; i<v->n; i++) {
+        if (strcmp(v->v[i], s)==0) return 1;
+    }
+    return 0;
+}
+
+static void vecstr_push_unique(VecStr *v, const char *s) {
+    if (!s || vecstr_contains(v, s)) return;
+    VEC_PUSH(*v, xstrdup(s));
+}
+
+static void collect_stmt_tasks(Stmt *s, VecStr *out);
+
+static void collect_stmt_list_tasks(const VecStmtPtr *list, VecStr *out) {
+    for (int i = 0; i<list->n; i++) collect_stmt_tasks(list->v[i], out);
+}
+
+static void collect_stmt_tasks(Stmt *s, VecStr *out) {
+    if (!s) return;
+    if (s->kind == ST_TASK) {
+        vecstr_push_unique(out, s->u.task.task_name);
+        return;
+    }
+    if (s->kind == ST_IF) {
+        collect_stmt_list_tasks(&s->u.if_.then_stmts, out);
+        collect_stmt_list_tasks(&s->u.if_.else_stmts, out);
+    }
+}
+
+static void collect_character_tasks(Character *ch, VecStr *out) {
+    VEC_INIT(*out);
+    for (int i = 0; i<ch->thresholds.n; i++) collect_stmt_tasks(ch->thresholds.v[i].action, out);
+    for (int i = 0; i<ch->blocks.n; i++) collect_stmt_list_tasks(&ch->blocks.v[i].stmts, out);
+    for (int i = 0; i<ch->rules.n; i++) collect_stmt_list_tasks(&ch->rules.v[i].stmts, out);
+    for (int i = 0; i<ch->on_events.n; i++) collect_stmt_list_tasks(&ch->on_events.v[i].stmts, out);
+}
+
+static int group_completed_count(const AgentDiagnostics *d, const char *const *tasks, int ntasks) {
+    int total = 0;
+    for (int i = 0; i<ntasks; i++) total += diag_task_count(d, tasks[i]);
+    return total;
+}
+
+static int group_in_plan(const VecStr *planned, const char *const *tasks, int ntasks) {
+    for (int i = 0; i<ntasks; i++) {
+        if (vecstr_contains(planned, tasks[i])) return 1;
+    }
+    return 0;
+}
+
+static void print_need_line(
+    const char *name,
+    const char *state,
+    double metric,
+    const char *metric_name,
+    int completed_support,
+    int in_plan,
+    int in_progress
+) {
+    printf("      %s: %s (%s=%.0f) support_tasks_completed=%d support_task_in_progress=%s support_tasks_in_plan=%s\n",
+           name, state, metric_name, metric, completed_support, in_progress?"yes":"no", in_plan?"yes":"no");
+}
+
+static const char *low_is_bad_state(double v, double critical, double low) {
+    if (v <= critical) return "CRITICAL";
+    if (v <= low) return "LOW";
+    return "OK";
+}
+
+static const char *high_is_bad_state(double v, double low, double critical) {
+    if (v >= critical) return "CRITICAL";
+    if (v >= low) return "LOW";
+    return "OK";
+}
+
+static double edible_stock(World *w) {
+    return inv_stock(&w->inv, "Food")
+           + inv_stock(&w->inv, "Fish")
+           + inv_stock(&w->inv, "Tomato")
+           + inv_stock(&w->inv, "Green bean")
+           + inv_stock(&w->inv, "Chili")
+           + inv_stock(&w->inv, "Garlic")
+           + inv_stock(&w->inv, "Ramen")
+           + inv_stock(&w->inv, "Canned spam")
+           + inv_stock(&w->inv, "Canned tomato")
+           + inv_stock(&w->inv, "Canned beans")
+           + inv_stock(&w->inv, "Canned corn")
+           + inv_stock(&w->inv, "Canned tuna")
+           + w->cooked_food_portions;
+}
+
+static double total_water_stock(World *w) {
+    return w->shelter.water_safe + w->shelter.water_raw + inv_stock(&w->inv, "Water");
+}
+
+static int group_in_progress(Character *ch, const char *const *tasks, int ntasks) {
+    if (!ch->rt_task || ch->rt_remaining <= 0) return 0;
+    for (int i = 0; i<ntasks; i++) {
+        if (strcmp(ch->rt_task, tasks[i])==0) return 1;
+    }
+    return 0;
+}
+
+static void print_need_diagnostics(Character *ch, World *w, const AgentDiagnostics *d, const VecStr *planned) {
+    static const char *kNourishTasks[] = {"Eating", "Meal prep", "Cooking", "Fish cleaning", "Food preservation"};
+    static const char *kHydrationTasks[] = {"Water collection", "Water filtration", "Eating"};
+    static const char *kRestTasks[] = {"Sleeping", "Resting"};
+    static const char *kMoraleTasks[] = {"Socializing", "Talking", "Reading", "Playing video games", "Playing guitar", "Painting", "Drawing"};
+    static const char *kInjuryTasks[] = {"First aid", "Resting", "Sleeping"};
+    static const char *kIllnessTasks[] = {"Medical treatment", "Water filtration", "Cleaning", "Resting", "Sleeping"};
+
+    int nourish_done = group_completed_count(d, kNourishTasks, (int)(sizeof(kNourishTasks)/sizeof(kNourishTasks[0])));
+    int hydration_done = group_completed_count(d, kHydrationTasks, (int)(sizeof(kHydrationTasks)/sizeof(kHydrationTasks[0])));
+    int rest_done = group_completed_count(d, kRestTasks, (int)(sizeof(kRestTasks)/sizeof(kRestTasks[0])));
+    int morale_done = group_completed_count(d, kMoraleTasks, (int)(sizeof(kMoraleTasks)/sizeof(kMoraleTasks[0])));
+    int injury_done = group_completed_count(d, kInjuryTasks, (int)(sizeof(kInjuryTasks)/sizeof(kInjuryTasks[0])));
+    int illness_done = group_completed_count(d, kIllnessTasks, (int)(sizeof(kIllnessTasks)/sizeof(kIllnessTasks[0])));
+
+    int nourish_in_plan = group_in_plan(planned, kNourishTasks, (int)(sizeof(kNourishTasks)/sizeof(kNourishTasks[0])));
+    int hydration_in_plan = group_in_plan(planned, kHydrationTasks, (int)(sizeof(kHydrationTasks)/sizeof(kHydrationTasks[0])));
+    int rest_in_plan = group_in_plan(planned, kRestTasks, (int)(sizeof(kRestTasks)/sizeof(kRestTasks[0])));
+    int morale_in_plan = group_in_plan(planned, kMoraleTasks, (int)(sizeof(kMoraleTasks)/sizeof(kMoraleTasks[0])));
+    int injury_in_plan = group_in_plan(planned, kInjuryTasks, (int)(sizeof(kInjuryTasks)/sizeof(kInjuryTasks[0])));
+    int illness_in_plan = group_in_plan(planned, kIllnessTasks, (int)(sizeof(kIllnessTasks)/sizeof(kIllnessTasks[0])));
+
+    int nourish_in_progress = group_in_progress(ch, kNourishTasks, (int)(sizeof(kNourishTasks)/sizeof(kNourishTasks[0])));
+    int hydration_in_progress = group_in_progress(ch, kHydrationTasks, (int)(sizeof(kHydrationTasks)/sizeof(kHydrationTasks[0])));
+    int rest_in_progress = group_in_progress(ch, kRestTasks, (int)(sizeof(kRestTasks)/sizeof(kRestTasks[0])));
+    int morale_in_progress = group_in_progress(ch, kMoraleTasks, (int)(sizeof(kMoraleTasks)/sizeof(kMoraleTasks[0])));
+    int injury_in_progress = group_in_progress(ch, kInjuryTasks, (int)(sizeof(kInjuryTasks)/sizeof(kInjuryTasks[0])));
+    int illness_in_progress = group_in_progress(ch, kIllnessTasks, (int)(sizeof(kIllnessTasks)/sizeof(kIllnessTasks[0])));
+
+    printf("    life-gaps:\n");
+    print_need_line("nourishment", low_is_bad_state(ch->hunger, 20.0, 45.0), ch->hunger, "hunger", nourish_done, nourish_in_plan, nourish_in_progress);
+    if (ch->hunger <= 45.0 && nourish_done == 0) printf("        gap: recovery tasks for food were never completed.\n");
+    if (ch->hunger <= 45.0 && !nourish_in_plan) printf("        gap: no food-recovery task is present in this character's policy.\n");
+    if (ch->hunger <= 45.0 && edible_stock(w) < 1.0) printf("        gap: edible stock is near zero (edible_total=%.1f).\n", edible_stock(w));
+
+    print_need_line("hydration", low_is_bad_state(ch->hydration, 20.0, 45.0), ch->hydration, "hydration", hydration_done, hydration_in_plan, hydration_in_progress);
+    if (ch->hydration <= 45.0 && hydration_done == 0) printf("        gap: water-related tasks were never completed.\n");
+    if (ch->hydration <= 45.0 && !hydration_in_plan) printf("        gap: no water-supply task is present in this character's policy.\n");
+    if (ch->hydration <= 45.0 && total_water_stock(w) < 1.0) printf("        gap: available water is near zero (water_total=%.1f).\n", total_water_stock(w));
+
+    print_need_line("rest", high_is_bad_state(ch->fatigue, 65.0, 85.0), ch->fatigue, "fatigue", rest_done, rest_in_plan, rest_in_progress);
+    if (ch->fatigue >= 65.0 && rest_done == 0) printf("        gap: no Sleeping/Resting tasks were completed.\n");
+    if (ch->fatigue >= 65.0 && !rest_in_plan) printf("        gap: no Sleeping/Resting task exists in this character's policy.\n");
+
+    print_need_line("social/emotional", low_is_bad_state(ch->morale, 25.0, 45.0), ch->morale, "morale", morale_done, morale_in_plan, morale_in_progress);
+    if (ch->morale <= 45.0 && morale_done == 0) printf("        gap: morale-support tasks were never completed.\n");
+    if (ch->morale <= 45.0 && !morale_in_plan) printf("        gap: no morale-support task exists in this character's policy.\n");
+
+    print_need_line("injury-care", high_is_bad_state(ch->injury, 25.0, 50.0), ch->injury, "injury", injury_done, injury_in_plan, injury_in_progress);
+    if (ch->injury >= 25.0 && injury_done == 0) printf("        gap: injury-mitigation tasks were never completed.\n");
+    if (ch->injury >= 25.0 && !injury_in_plan) printf("        gap: no injury-mitigation task exists in this character's policy.\n");
+    if (ch->injury >= 25.0 && inv_stock(&w->inv, "First-aid box") <= 0.0) printf("        gap: no First-aid box remains in inventory.\n");
+
+    print_need_line("illness-care", high_is_bad_state(ch->illness, 25.0, 50.0), ch->illness, "illness", illness_done, illness_in_plan, illness_in_progress);
+    if (ch->illness >= 25.0 && illness_done == 0) printf("        gap: illness-mitigation tasks were never completed.\n");
+    if (ch->illness >= 25.0 && !illness_in_plan) printf("        gap: no illness-mitigation task exists in this character's policy.\n");
+    if (ch->illness >= 25.0 && inv_stock(&w->inv, "Medical box") <= 0.0) printf("        gap: no Medical box remains in inventory.\n");
+}
+
+static void print_agent_diagnostics(Character *ch, Catalog *cat, World *w, const AgentDiagnostics *d) {
+    VecStr planned;
+    collect_character_tasks(ch, &planned);
+
+    printf("\n  agent: %s\n", ch->name);
+    printf("    snapshot: hunger=%.0f hyd=%.0f fatigue=%.0f morale=%.0f injury=%.0f illness=%.0f posture=%s\n",
+           ch->hunger, ch->hydration, ch->fatigue, ch->morale, ch->injury, ch->illness, ch->defense_posture);
+    printf("    runtime: active_task=%s remaining=%d\n",
+           ch->rt_task ? ch->rt_task : "(none)", ch->rt_remaining);
+    printf("    activity: total_completed=%d unique_completed=%d idle_ticks=%d conflict_yields=%d\n",
+           diag_total_completions(d), d->n, d->idle_ticks, d->conflict_yields);
+
+    if (d->n == 0) {
+        printf("    completed_tasks: (none)\n");
+    } else {
+        printf("    completed_tasks:\n");
+        for (int i = 0; i<d->n; i++) {
+            printf("      - %s x%d\n", d->tasks[i].task_name, d->tasks[i].count);
+        }
+    }
+
+    int planned_not_done = 0;
+    for (int i = 0; i<planned.n; i++) {
+        if (diag_task_count(d, planned.v[i]) == 0) planned_not_done++;
+    }
+    if (planned_not_done == 0) {
+        printf("    planned_but_not_completed: (none)\n");
+    } else {
+        printf("    planned_but_not_completed (%d):\n", planned_not_done);
+        for (int i = 0; i<planned.n; i++) {
+            if (diag_task_count(d, planned.v[i]) == 0) {
+                TaskDef *td = cat_find_task(cat, planned.v[i]);
+                int in_progress = (ch->rt_task && ch->rt_remaining > 0 && strcmp(ch->rt_task, planned.v[i])==0);
+                printf("      - %s (catalog=%s in_progress=%s)\n", planned.v[i], td?"yes":"no", in_progress?"yes":"no");
+            }
+        }
+    }
+
+    print_need_diagnostics(ch, w, d, &planned);
+
+    for (int i = 0; i<planned.n; i++) free(planned.v[i]);
+    VEC_FREE(planned);
+}
+
+static void print_world_diagnostics(World *w) {
+    printf("  world snapshot: structure=%.0f temp=%.1f power=%.0f sig=%.0f contamination=%.0f water_safe=%.0f water_raw=%.0f hydro=%.0f\n",
+           w->shelter.structure,
+           w->shelter.temp_c,
+           w->shelter.power,
+           w->shelter.signature,
+           w->shelter.contamination,
+           w->shelter.water_safe,
+           w->shelter.water_raw,
+           w->hydroponic_health);
+    printf("  world stock: edible_total=%.1f cooked=%.1f water_total=%.1f first_aid=%.1f medical=%.1f plants=%.1f seeds=%.1f soil=%.1f\n",
+           edible_stock(w),
+           w->cooked_food_portions,
+           total_water_stock(w),
+           inv_stock(&w->inv, "First-aid box"),
+           inv_stock(&w->inv, "Medical box"),
+           inv_stock(&w->inv, "Plant"),
+           inv_stock(&w->inv, "Seeds"),
+           inv_stock(&w->inv, "Soil"));
+}
 
 static void plan_day_events(World *w, DayEvents *ev) {
     ev->breach_tick = -1;
@@ -463,6 +749,10 @@ static void print_status(Character *ch) {
 }
 
 void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
+    AgentDiagnostics da, db;
+    diag_init(&da);
+    diag_init(&db);
+
     for (int day = 0; day<days; day++) {
         DayEvents ev;
         plan_day_events(w, &ev);
@@ -501,6 +791,7 @@ void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
                 A->rt_remaining--;
                 if (A->rt_remaining==0 && A->rt_task) {
                     printf("    %s completed: %s\n", A->name, A->rt_task);
+                    diag_record_completion(&da, A->rt_task);
                     apply_task_effects(w, A, A->rt_task);
                     A->rt_task = NULL;
                     A->rt_station = NULL;
@@ -511,6 +802,7 @@ void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
                 B->rt_remaining--;
                 if (B->rt_remaining==0 && B->rt_task) {
                     printf("    %s completed: %s\n", B->name, B->rt_task);
+                    diag_record_completion(&db, B->rt_task);
                     apply_task_effects(w, B, B->rt_task);
                     B->rt_task = NULL;
                     B->rt_station = NULL;
@@ -530,9 +822,11 @@ void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
                     int a_wins = (ca.priority > cb.priority) || (ca.priority==cb.priority && strcmp(A->name, B->name)<=0);
                     if (a_wins) {
                         printf("    CONFLICT: station '%s' claimed by %s (priority %.1f); %s yields\n", ca.station, A->name, ca.priority, B->name);
+                        db.conflict_yields++;
                         cb.kind = 3;
                     } else {
                         printf("    CONFLICT: station '%s' claimed by %s (priority %.1f); %s yields\n", cb.station, B->name, cb.priority, A->name);
+                        da.conflict_yields++;
                         ca.kind = 3;
                     }
                 }
@@ -547,6 +841,7 @@ void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
                     A->rt_priority = ca.priority;
                     printf("    %s starts: %s (%dt) station=%s priority=%.1f\n", A->name, ca.task_name, ca.ticks, ca.station?ca.station:"-", ca.priority);
                 } else {
+                    da.idle_ticks++;
                     printf("    %s idle\n", A->name);
                 }
             } else {
@@ -561,6 +856,7 @@ void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
                     B->rt_priority = cb.priority;
                     printf("    %s starts: %s (%dt) station=%s priority=%.1f\n", B->name, cb.task_name, cb.ticks, cb.station?cb.station:"-", cb.priority);
                 } else {
+                    db.idle_ticks++;
                     printf("    %s idle\n", B->name);
                 }
             } else {
@@ -609,4 +905,12 @@ void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
             }
         }
     }
+
+    printf("\n=== SIMULATION COMPLETE ===\n");
+    print_world_diagnostics(w);
+    print_agent_diagnostics(A, cat, w, &da);
+    print_agent_diagnostics(B, cat, w, &db);
+
+    diag_free(&da);
+    diag_free(&db);
 }
