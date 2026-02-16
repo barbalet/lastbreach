@@ -1,43 +1,17 @@
 import SceneKit
 import UIKit
 
-enum VoxelType {
-    case water
-    case soil
-    case air
-
-    static func random() -> VoxelType {
-        let draw = Int.random(in: 0..<100)
-        switch draw {
-        case 0..<34:
-            return .water
-        case 34..<68:
-            return .soil
-        default:
-            return .air
-        }
-    }
+enum VoxelType: UInt8 {
+    case water = 0
+    case soil = 1
+    case air = 2
 }
 
-enum SurfaceType {
-    case open
-    case trapdoorDoor
-    case windowSkylight
-    case floorWall
-
-    static func random() -> SurfaceType {
-        let draw = Int.random(in: 0..<100)
-        switch draw {
-        case 0..<25:
-            return .open
-        case 25..<50:
-            return .trapdoorDoor
-        case 50..<75:
-            return .windowSkylight
-        default:
-            return .floorWall
-        }
-    }
+enum SurfaceType: UInt8 {
+    case open = 0
+    case trapdoorDoor = 1
+    case windowSkylight = 2
+    case floorWall = 3
 }
 
 enum CubeFace: Int, CaseIterable {
@@ -53,9 +27,9 @@ struct VoxelCell {
     let type: VoxelType
     let surfaces: [SurfaceType]
 
-    init(type: VoxelType) {
+    init(type: VoxelType, surfaces: [SurfaceType]) {
         self.type = type
-        self.surfaces = CubeFace.allCases.map { _ in SurfaceType.random() }
+        self.surfaces = surfaces
     }
 
     func surface(at face: CubeFace) -> SurfaceType {
@@ -111,17 +85,47 @@ enum VoxelSceneFactory {
     }
 
     private static func makeGrid(size: Int) -> [[[VoxelCell]]] {
+        let cellCount = size * size * size
+        let faceCount = CubeFace.allCases.count
+
+        var randomTypes = [UInt8](repeating: 0, count: cellCount)
+        var randomFaces = [UInt8](repeating: 0, count: cellCount * faceCount)
+
+        randomTypes.withUnsafeMutableBufferPointer { typeBuffer in
+            randomFaces.withUnsafeMutableBufferPointer { faceBuffer in
+                lb_randomize_voxels(
+                    cellCount,
+                    typeBuffer.baseAddress,
+                    faceBuffer.baseAddress,
+                    faceCount
+                )
+            }
+        }
+
         var grid: [[[VoxelCell]]] = []
         grid.reserveCapacity(size)
 
-        for _ in 0..<size {
+        for x in 0..<size {
             var layerY: [[VoxelCell]] = []
             layerY.reserveCapacity(size)
-            for _ in 0..<size {
+            for y in 0..<size {
                 var layerZ: [VoxelCell] = []
                 layerZ.reserveCapacity(size)
-                for _ in 0..<size {
-                    layerZ.append(VoxelCell(type: VoxelType.random()))
+                for z in 0..<size {
+                    let index = (x * size * size) + (y * size) + z
+
+                    let cellType = VoxelType(rawValue: randomTypes[index]) ?? .air
+                    let faceOffset = index * faceCount
+
+                    var surfaces: [SurfaceType] = []
+                    surfaces.reserveCapacity(faceCount)
+
+                    for faceIndex in 0..<faceCount {
+                        let surfaceRaw = randomFaces[faceOffset + faceIndex]
+                        surfaces.append(SurfaceType(rawValue: surfaceRaw) ?? .open)
+                    }
+
+                    layerZ.append(VoxelCell(type: cellType, surfaces: surfaces))
                 }
                 layerY.append(layerZ)
             }
