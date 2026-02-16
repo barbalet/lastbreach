@@ -2,16 +2,294 @@
 
 #include <stdlib.h>
 
-static uint8_t lb_random_voxel_type(void) {
-    uint32_t draw = arc4random_uniform(100);
+static int32_t lb_clamp_int32(int32_t value, int32_t min_value, int32_t max_value) {
+    if (value < min_value) {
+        return min_value;
+    }
+    if (value > max_value) {
+        return max_value;
+    }
+    return value;
+}
 
-    if (draw < 34) {
-        return 0; // water
+static int32_t lb_random_int32(int32_t min_value, int32_t max_value) {
+    if (max_value <= min_value) {
+        return min_value;
     }
-    if (draw < 68) {
-        return 1; // soil
+
+    uint32_t span = (uint32_t)(max_value - min_value + 1);
+    return min_value + (int32_t)arc4random_uniform(span);
+}
+
+static size_t lb_random_size_t(size_t min_value, size_t max_value) {
+    if (max_value <= min_value) {
+        return min_value;
     }
-    return 2; // air
+
+    size_t span = max_value - min_value + 1;
+    if (span > (size_t)UINT32_MAX) {
+        span = (size_t)UINT32_MAX;
+    }
+
+    return min_value + (size_t)arc4random_uniform((uint32_t)span);
+}
+
+static size_t lb_random_index(size_t count) {
+    if (count <= 1) {
+        return 0;
+    }
+
+    if (count > (size_t)UINT32_MAX) {
+        return (size_t)arc4random_uniform(UINT32_MAX);
+    }
+    return (size_t)arc4random_uniform((uint32_t)count);
+}
+
+static size_t lb_diagonal_position(size_t grid_size, size_t x, size_t z, uint32_t mode) {
+    size_t edge = grid_size - 1;
+
+    switch (mode) {
+        case 1:
+            return x + (edge - z);
+        case 2:
+            return (edge - x) + z;
+        case 3:
+            return (edge - x) + (edge - z);
+        default:
+            return x + z;
+    }
+}
+
+static int32_t lb_diagonal_soil_top(
+    size_t grid_size,
+    size_t x,
+    size_t z,
+    uint32_t diagonal_mode,
+    int32_t low_height,
+    int32_t high_height,
+    int32_t jitter
+) {
+    int32_t base_height = low_height;
+
+    if (grid_size > 1) {
+        size_t diagonal_max = 2 * (grid_size - 1);
+        size_t diagonal = lb_diagonal_position(grid_size, x, z, diagonal_mode);
+        int64_t delta = (int64_t)high_height - (int64_t)low_height;
+
+        base_height += (int32_t)((delta * (int64_t)diagonal) / (int64_t)diagonal_max);
+    }
+
+    if (jitter > 0) {
+        base_height += lb_random_int32(-jitter, jitter);
+    }
+
+    return lb_clamp_int32(base_height, 0, (int32_t)grid_size - 1);
+}
+
+static size_t lb_voxel_index(size_t grid_size, size_t x, size_t y, size_t z) {
+    return (x * grid_size * grid_size) + (y * grid_size) + z;
+}
+
+static int lb_is_in_center_air(
+    size_t x,
+    size_t z,
+    size_t center_start_x,
+    size_t center_end_x,
+    size_t center_start_z,
+    size_t center_end_z
+) {
+    return x >= center_start_x && x < center_end_x && z >= center_start_z && z < center_end_z;
+}
+
+static void lb_adjust_soil_to_target(
+    int32_t *soil_tops,
+    size_t column_count,
+    int32_t max_top,
+    size_t target_soil_cells,
+    size_t *soil_cells_inout
+) {
+    size_t guard = (column_count * (size_t)(max_top + 1) * 6) + 1;
+
+    while (*soil_cells_inout < target_soil_cells && guard > 0) {
+        size_t index = lb_random_index(column_count);
+        if (soil_tops[index] >= 0 && soil_tops[index] < max_top) {
+            soil_tops[index] += 1;
+            *soil_cells_inout += 1;
+        }
+        guard--;
+    }
+
+    if (*soil_cells_inout < target_soil_cells) {
+        for (size_t i = 0; i < column_count && *soil_cells_inout < target_soil_cells; i++) {
+            while (soil_tops[i] >= 0 && soil_tops[i] < max_top && *soil_cells_inout < target_soil_cells) {
+                soil_tops[i] += 1;
+                *soil_cells_inout += 1;
+            }
+        }
+    }
+
+    guard = (column_count * (size_t)(max_top + 1) * 6) + 1;
+
+    while (*soil_cells_inout > target_soil_cells && guard > 0) {
+        size_t index = lb_random_index(column_count);
+        if (soil_tops[index] > 0) {
+            soil_tops[index] -= 1;
+            *soil_cells_inout -= 1;
+        }
+        guard--;
+    }
+
+    if (*soil_cells_inout > target_soil_cells) {
+        for (size_t i = 0; i < column_count && *soil_cells_inout > target_soil_cells; i++) {
+            while (soil_tops[i] > 0 && *soil_cells_inout > target_soil_cells) {
+                soil_tops[i] -= 1;
+                *soil_cells_inout -= 1;
+            }
+        }
+    }
+}
+
+static void lb_raise_soil_protrusions(
+    int32_t *soil_tops,
+    size_t column_count,
+    int32_t water_level,
+    int32_t max_height,
+    size_t minimum_water_cells,
+    size_t *soil_cells_inout
+) {
+    if (column_count == 0 || water_level >= max_height) {
+        return;
+    }
+
+    size_t water_cells = 0;
+    for (size_t i = 0; i < column_count; i++) {
+        if (soil_tops[i] >= 0 && soil_tops[i] < water_level) {
+            water_cells += (size_t)(water_level - soil_tops[i]);
+        }
+    }
+
+    if (water_cells <= minimum_water_cells) {
+        return;
+    }
+
+    size_t water_surplus = water_cells - minimum_water_cells;
+    size_t attempts = column_count * 4;
+
+    while (attempts > 0 && water_surplus > 0) {
+        size_t index = lb_random_index(column_count);
+        int32_t top = soil_tops[index];
+
+        if (top < 0 || top >= max_height) {
+            attempts--;
+            continue;
+        }
+
+        int32_t raise_by = lb_random_int32(1, max_height - top);
+        int32_t raised_top = top + raise_by;
+
+        size_t water_cost = 0;
+        if (top < water_level) {
+            int32_t capped_raised_top = raised_top < water_level ? raised_top : water_level;
+            water_cost = (size_t)(capped_raised_top - top);
+        }
+
+        if (water_cost > water_surplus) {
+            attempts--;
+            continue;
+        }
+
+        soil_tops[index] = raised_top;
+        *soil_cells_inout += (size_t)raise_by;
+        water_surplus -= water_cost;
+        attempts--;
+    }
+}
+
+static void lb_add_top_air_soil_spikes(
+    int32_t *soil_tops,
+    size_t column_count,
+    size_t active_column_count,
+    int32_t fill_top,
+    int32_t top_air_layers
+) {
+    if (column_count == 0 || active_column_count == 0 || top_air_layers <= 0) {
+        return;
+    }
+
+    if (arc4random_uniform(100) < 35) {
+        return; // Keep spikes optional so flat tops are still common.
+    }
+
+    size_t top_air_cells = active_column_count * (size_t)top_air_layers;
+    size_t max_spike_cells = (top_air_cells * 29) / 100;
+    if (max_spike_cells == 0) {
+        return;
+    }
+
+    size_t target_spike_cells = lb_random_size_t(1, max_spike_cells);
+    size_t max_spike_columns = (active_column_count * 20) / 100;
+    if (max_spike_columns == 0) {
+        max_spike_columns = 1;
+    }
+    if (max_spike_columns > active_column_count) {
+        max_spike_columns = active_column_count;
+    }
+
+    size_t spike_column_target = lb_random_size_t(1, max_spike_columns);
+    uint8_t *spike_markers = (uint8_t *)calloc(column_count, sizeof(uint8_t));
+    if (spike_markers == NULL) {
+        return;
+    }
+
+    size_t remaining_cells = target_spike_cells;
+    size_t remaining_columns = spike_column_target;
+    size_t attempts = column_count * 8;
+
+    while (remaining_columns > 0 && remaining_cells > 0 && attempts > 0) {
+        size_t column_index = lb_random_index(column_count);
+        if (soil_tops[column_index] < 0 || spike_markers[column_index] != 0) {
+            attempts--;
+            continue;
+        }
+
+        spike_markers[column_index] = 1;
+
+        size_t minimum_cells_for_rest = remaining_columns > 1 ? (remaining_columns - 1) : 0;
+        size_t max_cells_for_this_column = remaining_cells - minimum_cells_for_rest;
+        int32_t desired_raise = lb_random_int32(1, top_air_layers);
+        if ((size_t)desired_raise > max_cells_for_this_column) {
+            desired_raise = (int32_t)max_cells_for_this_column;
+        }
+        if (desired_raise < 1) {
+            desired_raise = 1;
+        }
+
+        soil_tops[column_index] = fill_top + desired_raise;
+        remaining_cells -= (size_t)desired_raise;
+        remaining_columns--;
+        attempts--;
+    }
+
+    attempts = column_count * 8;
+    while (remaining_cells > 0 && attempts > 0) {
+        size_t column_index = lb_random_index(column_count);
+        if (soil_tops[column_index] < 0 || spike_markers[column_index] == 0) {
+            attempts--;
+            continue;
+        }
+
+        int32_t current_raise = soil_tops[column_index] - fill_top;
+        if (current_raise >= top_air_layers) {
+            attempts--;
+            continue;
+        }
+
+        soil_tops[column_index] += 1;
+        remaining_cells--;
+        attempts--;
+    }
+
+    free(spike_markers);
 }
 
 static uint8_t lb_random_surface_type(void) {
@@ -29,17 +307,183 @@ static uint8_t lb_random_surface_type(void) {
     return 3; // floor/wall
 }
 
-void lb_randomize_voxels(size_t cell_count, uint8_t *voxel_types_out, uint8_t *surfaces_out, size_t faces_per_cell) {
-    if (voxel_types_out == NULL || surfaces_out == NULL || faces_per_cell == 0) {
+void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *surfaces_out, size_t faces_per_cell) {
+    if (grid_size == 0 || voxel_types_out == NULL || surfaces_out == NULL || faces_per_cell == 0) {
         return;
     }
 
-    for (size_t i = 0; i < cell_count; i++) {
-        voxel_types_out[i] = lb_random_voxel_type();
+    size_t column_count = grid_size * grid_size;
+    int32_t max_height = (int32_t)grid_size - 1;
 
-        uint8_t *surface_start = surfaces_out + (i * faces_per_cell);
-        for (size_t face = 0; face < faces_per_cell; face++) {
-            surface_start[face] = lb_random_surface_type();
+    int32_t top_air_layers = 0;
+    if (grid_size > 4) {
+        top_air_layers = lb_random_int32(2, 3);
+    } else if (grid_size > 2) {
+        top_air_layers = 2;
+    } else if (grid_size > 1) {
+        top_air_layers = 1;
+    }
+    if (top_air_layers > max_height) {
+        top_air_layers = max_height;
+    }
+
+    int32_t fill_top = max_height - top_air_layers;
+    size_t center_span_x = grid_size >= 5 ? lb_random_size_t(4, 5) : (grid_size >= 4 ? 4 : grid_size);
+    size_t center_span_z = grid_size >= 5 ? lb_random_size_t(4, 5) : (grid_size >= 4 ? 4 : grid_size);
+    if (center_span_x > grid_size) {
+        center_span_x = grid_size;
+    }
+    if (center_span_z > grid_size) {
+        center_span_z = grid_size;
+    }
+
+    size_t center_start_x = (grid_size - center_span_x) / 2;
+    size_t center_end_x = center_start_x + center_span_x;
+    size_t center_start_z = (grid_size - center_span_z) / 2;
+    size_t center_end_z = center_start_z + center_span_z;
+
+    size_t center_air_columns = center_span_x * center_span_z;
+    size_t active_column_count = column_count > center_air_columns ? (column_count - center_air_columns) : 0;
+    if (active_column_count == 0) {
+        size_t cell_count = grid_size * grid_size * grid_size;
+        for (size_t i = 0; i < cell_count; i++) {
+            voxel_types_out[i] = 2; // air
+            uint8_t *surface_start = surfaces_out + (i * faces_per_cell);
+            for (size_t face = 0; face < faces_per_cell; face++) {
+                surface_start[face] = lb_random_surface_type();
+            }
+        }
+        return;
+    }
+
+    size_t fillable_cells = active_column_count * (size_t)(fill_top + 1);
+
+    size_t minimum_material_cells = ((fillable_cells * 40) / 100) + 1;
+    size_t max_balanced_minimum = fillable_cells / 2;
+    if (max_balanced_minimum == 0) {
+        minimum_material_cells = 0;
+    } else if (minimum_material_cells > max_balanced_minimum) {
+        minimum_material_cells = max_balanced_minimum;
+    }
+
+    size_t minimum_combined_cells = minimum_material_cells * 2;
+    size_t minimum_levels = (minimum_combined_cells + active_column_count - 1) / active_column_count;
+    int32_t minimum_water_level = lb_clamp_int32((int32_t)minimum_levels - 1, 0, fill_top);
+
+    int32_t water_level_a = lb_random_int32(minimum_water_level, fill_top);
+    int32_t water_level_b = lb_random_int32(minimum_water_level, fill_top);
+    int32_t water_level = water_level_a > water_level_b ? water_level_a : water_level_b;
+
+    size_t combined_cells_at_water_level = active_column_count * (size_t)(water_level + 1);
+    size_t maximum_soil_cells = 0;
+    if (combined_cells_at_water_level > minimum_material_cells) {
+        maximum_soil_cells = combined_cells_at_water_level - minimum_material_cells;
+    }
+    if (maximum_soil_cells < minimum_material_cells) {
+        maximum_soil_cells = minimum_material_cells;
+    }
+
+    size_t balanced_low = minimum_material_cells;
+    size_t balanced_high = maximum_soil_cells;
+    if (balanced_high > balanced_low) {
+        size_t midpoint = (balanced_low + balanced_high) / 2;
+        size_t band = (balanced_high - balanced_low) / 4;
+
+        if (band > 0) {
+            if (midpoint > band && midpoint - band > balanced_low) {
+                balanced_low = midpoint - band;
+            }
+            if (midpoint + band < balanced_high) {
+                balanced_high = midpoint + band;
+            }
         }
     }
+
+    size_t target_soil_cells = lb_random_size_t(balanced_low, balanced_high);
+
+    int32_t soil_center = lb_clamp_int32((int32_t)(target_soil_cells / active_column_count) - 1, 0, water_level);
+    int32_t diagonal_span_limit = lb_clamp_int32((water_level / 2) + 1, 1, water_level > 0 ? water_level : 1);
+    int32_t diagonal_span = lb_random_int32(1, diagonal_span_limit);
+
+    int32_t soil_low = lb_clamp_int32(soil_center - diagonal_span, 0, water_level);
+    int32_t soil_high = lb_clamp_int32(soil_center + diagonal_span, 0, water_level);
+    if (soil_low == soil_high && water_level > 0) {
+        if (soil_high < water_level) {
+            soil_high += 1;
+        } else {
+            soil_low -= 1;
+        }
+    }
+
+    uint32_t diagonal_mode = arc4random_uniform(4);
+    int32_t jitter_limit = lb_clamp_int32((int32_t)grid_size / 3, 0, water_level > 0 ? water_level : 1);
+    int32_t jitter = lb_random_int32(0, jitter_limit);
+
+    int32_t *soil_tops = (int32_t *)malloc(column_count * sizeof(int32_t));
+    if (soil_tops == NULL) {
+        return;
+    }
+
+    size_t soil_cells = 0;
+    for (size_t x = 0; x < grid_size; x++) {
+        for (size_t z = 0; z < grid_size; z++) {
+            size_t column_index = (x * grid_size) + z;
+            if (lb_is_in_center_air(x, z, center_start_x, center_end_x, center_start_z, center_end_z)) {
+                soil_tops[column_index] = -1; // central core is forced air
+                continue;
+            }
+            soil_tops[column_index] = lb_diagonal_soil_top(
+                grid_size,
+                x,
+                z,
+                diagonal_mode,
+                soil_low,
+                soil_high,
+                jitter
+            );
+            soil_tops[column_index] = lb_clamp_int32(soil_tops[column_index], 0, water_level);
+            soil_cells += (size_t)(soil_tops[column_index] + 1);
+        }
+    }
+
+    lb_adjust_soil_to_target(soil_tops, column_count, water_level, target_soil_cells, &soil_cells);
+    lb_raise_soil_protrusions(
+        soil_tops,
+        column_count,
+        water_level,
+        fill_top,
+        minimum_material_cells,
+        &soil_cells
+    );
+    lb_add_top_air_soil_spikes(soil_tops, column_count, active_column_count, fill_top, top_air_layers);
+
+    for (size_t x = 0; x < grid_size; x++) {
+        for (size_t z = 0; z < grid_size; z++) {
+            size_t column_index = (x * grid_size) + z;
+            int32_t soil_top = soil_tops[column_index];
+            int is_center_air = lb_is_in_center_air(x, z, center_start_x, center_end_x, center_start_z, center_end_z);
+
+            for (size_t y = 0; y < grid_size; y++) {
+                size_t index = lb_voxel_index(grid_size, x, y, z);
+
+                uint8_t voxel_type = 2; // air
+                if (is_center_air) {
+                    voxel_type = 2; // central 4/5 x 4/5 core kept as air to the top
+                } else if ((int32_t)y <= soil_top) {
+                    voxel_type = 1; // soil
+                } else if ((int32_t)y <= water_level) {
+                    voxel_type = 0; // water
+                }
+
+                voxel_types_out[index] = voxel_type;
+
+                uint8_t *surface_start = surfaces_out + (index * faces_per_cell);
+                for (size_t face = 0; face < faces_per_cell; face++) {
+                    surface_start[face] = lb_random_surface_type();
+                }
+            }
+        }
+    }
+
+    free(soil_tops);
 }

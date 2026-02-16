@@ -94,7 +94,7 @@ enum VoxelSceneFactory {
         randomTypes.withUnsafeMutableBufferPointer { typeBuffer in
             randomFaces.withUnsafeMutableBufferPointer { faceBuffer in
                 lb_randomize_voxels(
-                    cellCount,
+                    size,
                     typeBuffer.baseAddress,
                     faceBuffer.baseAddress,
                     faceCount
