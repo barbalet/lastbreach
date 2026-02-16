@@ -463,13 +463,17 @@ static void lb_apply_window_layout(
         return;
     }
 
-    /* Reset transition-derived windows; explicit layout below re-applies them. */
+    /*
+     * Clear transition-derived windows so the explicit window layout below is
+     * the only source of window/skylight surfaces. This intentionally avoids
+     * reclassifying air<->water boundaries as floor/wall.
+     */
     size_t cell_count = grid_size * grid_size * grid_size;
     for (size_t i = 0; i < cell_count; i++) {
         uint8_t *surface_start = surfaces_out + (i * faces_per_cell);
         for (size_t face = 0; face < 6; face++) {
             if (surface_start[face] == 2) {
-                surface_start[face] = 3; // remove all default windows first
+                surface_start[face] = 0; // remove default transition windows first
             }
         }
     }
