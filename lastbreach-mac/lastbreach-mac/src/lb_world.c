@@ -13,6 +13,7 @@
 /** Initializes default world/shelter stats and event chances. */
 void world_init(World *w) {
     memset(w, 0, sizeof(*w));
+    /* Baseline shelter is intentionally stressed but survivable. */
     w->shelter.temp_c = 5.0;
     w->shelter.signature = 10.0;
     w->shelter.power = 25.0;
@@ -21,6 +22,7 @@ void world_init(World *w) {
     w->shelter.structure = 75.0;
     w->shelter.contamination = 10.0;
     inv_init(&w->inv);
+    /* Event defaults are percentages in [0, 100]. */
     w->events.breach_chance = 15.0;
     w->events.overnight_chance = 25.0;
     w->hydroponic_health = 55.0;

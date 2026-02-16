@@ -15,6 +15,7 @@ void cat_init(Catalog *c) {
     VEC_INIT(c->tasks);
 }
 TaskDef *cat_find_task(Catalog *c, const char *name) {
+    /* Catalog sizes are modest; linear lookup keeps code simple and transparent. */
     for (int i = 0; i<c->tasks.n; i++) if (strcmp(c->tasks.v[i].name, name)==0) return &c->tasks.v[i];
     return NULL;
 }
@@ -23,6 +24,7 @@ TaskDef *cat_get_or_add_task(Catalog *c, const char *name) {
     if (t) return t;
     TaskDef nt;
     nt.name = xstrdup(name);
+    /* Sensible defaults when DSL omits details. */
     nt.time_ticks = 1;
     nt.station = NULL;
     VEC_PUSH(c->tasks, nt);

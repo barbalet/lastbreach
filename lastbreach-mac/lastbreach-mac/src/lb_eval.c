@@ -6,10 +6,12 @@
  */
 
 void ectx_init(EvalCtx *c) {
+    /* Scratch symbol table used by `let` statements inside rule execution. */
     VEC_INIT(c->keys);
     VEC_INIT(c->vals);
 }
 void ectx_clear(EvalCtx *c) {
+    /* Free keys we own; values are plain doubles and need no destructor. */
     for (int i = 0; i<c->keys.n; i++) free(c->keys.v[i]);
     VEC_FREE(c->keys);
     VEC_FREE(c->vals);
@@ -17,6 +19,7 @@ void ectx_clear(EvalCtx *c) {
     VEC_INIT(c->vals);
 }
 void ectx_set(EvalCtx *c, const char *k, double v) {
+    /* Update in place if key exists; otherwise append. */
     for (int i = 0; i<c->keys.n; i++) if (strcmp(c->keys.v[i], k)==0) {
             c->vals.v[i] = v;
             return;
@@ -32,11 +35,16 @@ int ectx_get(EvalCtx *c, const char *k, double *out) {
     return 0;
 }
 int truthy(double v) {
+    /* DSL booleans are numeric: 0 is false, anything else is true. */
     return v!=0.0;
 }
 double eval_expr(EvalCtx *ctx, Expr *e);
 static double eval_call(EvalCtx *ctx, CallExpr *c) {
     const char *name = c->name;
+    /*
+     * Built-in functions are intentionally tiny and side-effect free.
+     * Unknown calls resolve to 0.0 so scripts remain robust under partial support.
+     */
     if ((strcmp(name, "stock")==0)||(strcmp(name, "has")==0)||(strcmp(name, "cond")==0)||(strcmp(name, "event")==0)) {
         if (c->args.n<1) return 0.0;
         Expr *a0 = c->args.v[0];
@@ -54,6 +62,11 @@ static double eval_call(EvalCtx *ctx, CallExpr *c) {
     return 0.0;
 }
 static double eval_var(EvalCtx *ctx, const char *v) {
+    /*
+     * Lookup order:
+     * 1) rule-local `let` bindings
+     * 2) runtime/system variables exposed by the simulation
+     */
     double out = 0;
     if (ectx_get(ctx, v, &out)) return out;
     if (strcmp(v, "tick")==0) return (double)ctx->tick;
@@ -75,6 +88,7 @@ static double eval_var(EvalCtx *ctx, const char *v) {
     return 0.0;
 }
 double eval_expr(EvalCtx *ctx, Expr *e) {
+    /* Recursive AST evaluator; each node kind maps directly to one case. */
     switch (e->kind) {
     case EX_NUM:
         return e->u.num;
@@ -103,6 +117,7 @@ double eval_expr(EvalCtx *ctx, Expr *e) {
         case OP_MUL:
             return a*b;
         case OP_DIV:
+            /* Division by zero is clamped to zero instead of aborting. */
             return (b==0)?0:(a/b);
         case OP_EQ:
             return (a==b)?1.0:0.0;

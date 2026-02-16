@@ -22,6 +22,7 @@ void test_fail_impl(const char *file, int line, const char *expr, const char *fm
 }
 
 void test_run_case(const char *name, test_fn_t fn) {
+    /* Snapshot failure count so a case can report pass/fail without exceptions. */
     int failed_before = g_failed;
     g_run++;
     fn();

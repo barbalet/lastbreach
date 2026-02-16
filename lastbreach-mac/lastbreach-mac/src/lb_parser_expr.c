@@ -5,7 +5,10 @@
  * Module: Expression AST construction and recursive-descent expression parsing.
  */
 
-/* Expr constructors */
+/*
+ * These tiny constructors centralize allocation/initialization so the parser
+ * can build AST nodes with one line per production.
+ */
 static Expr *ex_new(ExprKind k, int line) {
     Expr *e = (Expr*)xmalloc(sizeof(Expr));
     memset(e, 0, sizeof(*e));
@@ -54,6 +57,8 @@ static Expr *ex_call(char *name, VecExprPtr args, int line) {
 }
 static Expr *parse_primary(Parser *ps) {
     Token *t = &ps->lx.cur;
+
+    /* Numeric-like literals all collapse to EX_NUM for runtime simplicity. */
     if (ps_is(ps, TK_NUMBER)) {
         double v = t->num;
         int line = t->line;
@@ -82,6 +87,8 @@ static Expr *parse_primary(Parser *ps) {
         char *base = tk_cstr(t);
         int line = t->line;
         lx_next_token(&ps->lx);
+
+        /* identifier(...) => call expression with comma-separated arguments */
         if (ps_is(ps, TK_LPAREN)) {
             ps_expect(ps, TK_LPAREN, "(");
             VecExprPtr args;
@@ -101,6 +108,10 @@ static Expr *parse_primary(Parser *ps) {
             return ex_call(base, args, line);
         }
         if (ps_is(ps, TK_DOT)) {
+            /*
+             * Keep dotted lookups as a single variable token ("char.hunger")
+             * so runtime lookup stays table-driven and compact.
+             */
             size_t cap = strlen(base)+32;
             char *buf = (char*)xmalloc(cap);
             strcpy(buf, base);
@@ -131,6 +142,7 @@ static Expr *parse_primary(Parser *ps) {
     return NULL;
 }
 static Expr *parse_unary(Parser *ps) {
+    /* Unary operators are right-associative: "- -x" parses as "-(-x)". */
     if (ps_is_ident(ps, "not")) {
         int line = ps->lx.cur.line;
         lx_next_token(&ps->lx);
@@ -154,6 +166,7 @@ static Expr *parse_unary(Parser *ps) {
     return parse_primary(ps);
 }
 static Expr *parse_mul(Parser *ps) {
+    /* Standard precedence ladder: unary > mul/div > add/sub > compare > and > or. */
     Expr *e = parse_unary(ps);
     for (;;) {
         if (ps_is(ps, TK_STAR)) {
@@ -188,6 +201,7 @@ static Expr *parse_cmp(Parser *ps) {
     for (;;) {
         TokenKind k = ps->lx.cur.kind;
         int line = ps->lx.cur.line;
+        /* Comparison operators are parsed left-to-right. */
         if (k==TK_EQ) {
             ps_expect(ps, TK_EQ, "==");
             e = ex_bin(OP_EQ, e, parse_add(ps), line);
@@ -229,5 +243,6 @@ static Expr *parse_or(Parser *ps) {
     return e;
 }
 Expr *parse_expr(Parser *ps) {
+    /* Entry point intentionally returns the lowest-precedence parser level. */
     return parse_or(ps);
 }

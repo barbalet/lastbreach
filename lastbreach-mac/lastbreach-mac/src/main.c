@@ -53,6 +53,7 @@ int main(int argc, char **argv) {
     Catalog cat;
     cat_init(&cat);
     seed_default_catalog(&cat);
+    /* Auto-discover local data files for convenience in developer workflows. */
     if (!world_path && file_exists("world.lbw")) world_path = "world.lbw";
     if (!catalog_path && file_exists("catalog.lbc")) catalog_path = "catalog.lbc";
     if (catalog_path) {
@@ -77,6 +78,7 @@ int main(int argc, char **argv) {
     ps_init(&pa, a_path, a_src);
     Parser pb;
     ps_init(&pb, b_path, b_src);
+    /* Skip any DSL preamble until the first `character` block in each file. */
     while (!ps_is_ident(&pa, "character") && !ps_is(&pa, TK_EOF)) lx_next_token(&pa.lx);
     while (!ps_is_ident(&pb, "character") && !ps_is(&pb, TK_EOF)) lx_next_token(&pb.lx);
     if (ps_is(&pa, TK_EOF)) dief("%s: no character block found", a_path);

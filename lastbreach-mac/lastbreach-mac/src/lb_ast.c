@@ -13,6 +13,7 @@
 /** Initializes a character with baseline vitals and empty rule lists. */
 void character_init(Character *c) {
     memset(c, 0, sizeof(*c));
+    /* Start values are tuned so early thresholds can still trigger meaningfully. */
     c->hunger = 75;
     c->hydration = 75;
     c->fatigue = 20;
@@ -27,6 +28,7 @@ void character_init(Character *c) {
     VEC_INIT(c->blocks);
     VEC_INIT(c->rules);
     VEC_INIT(c->on_events);
+    /* Runtime task fields are set by scheduler/simulator only. */
     c->rt_task = NULL;
     c->rt_station = NULL;
     c->rt_remaining = 0;

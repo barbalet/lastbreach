@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 static void test_xalloc_helpers(void) {
+    /* Confirms wrappers succeed on normal allocations and NULL passthrough. */
     char *s = xstrdup("alpha");
     void *mem = xmalloc(8);
 
@@ -23,6 +24,7 @@ static void test_xalloc_helpers(void) {
 }
 
 static void test_inventory_basics(void) {
+    /* Inventory tracks both quantity accumulation and best condition. */
     Inventory inv;
     inv_init(&inv);
 
@@ -40,6 +42,7 @@ static void test_inventory_basics(void) {
 }
 
 static void test_catalog_basics(void) {
+    /* get_or_add must return stable pointers for duplicate task names. */
     Catalog cat;
     TaskDef *a;
     TaskDef *b;
@@ -59,6 +62,7 @@ static void test_catalog_basics(void) {
 }
 
 static void test_world_defaults(void) {
+    /* Guards baseline defaults expected by simulation and fixtures. */
     World w;
     world_init(&w);
 
@@ -74,6 +78,7 @@ static void test_world_defaults(void) {
 }
 
 static void test_io_helpers(void) {
+    /* Round-trip through filesystem helpers using an isolated temp file. */
     char path[] = "/tmp/lastbreach_test_io_XXXXXX";
     const char *payload = "hello from unit test\n";
     int fd = mkstemp(path);
@@ -97,6 +102,7 @@ static void test_io_helpers(void) {
 }
 
 static void test_seed_default_catalog_covers_tasks_file(void) {
+    /* Ensures seeded defaults keep parity with canonical task list data file. */
     Catalog cat;
     char *tasks = read_entire_file("../../data/tasks.txt");
     char *line;
@@ -129,6 +135,7 @@ static void test_seed_default_catalog_covers_tasks_file(void) {
 }
 
 static void test_dsl_catalog_covers_data_lists(void) {
+    /* Verifies DSL catalog declares every item/task listed in the data text files. */
     char *catalog = read_entire_file("../../dsl/catalog.lbc");
     char *items = read_entire_file("../../data/items.txt");
     char *tasks = read_entire_file("../../data/tasks.txt");

@@ -10,11 +10,13 @@ static int rand_percent(void) {
 }
 
 typedef struct {
+    /* -1 means no breach that day. */
     int breach_tick;
     int breach_level;
 } DayEvents;
 
 typedef struct {
+    /* Per-task completion counter used for end-of-run diagnostics. */
     char *task_name;
     int count;
 } TaskCount;
@@ -23,11 +25,13 @@ typedef struct {
     TaskCount *tasks;
     int n;
     int cap;
+    /* These counters make idle/conflict behavior visible in output summaries. */
     int idle_ticks;
     int conflict_yields;
 } AgentDiagnostics;
 
 typedef struct {
+    /* Canonical task name in catalog/scripts. */
     const char *name;
     double hunger;
     double hydration;
@@ -43,6 +47,11 @@ typedef struct {
     double signature;
 } TaskDelta;
 
+/*
+ * Baseline per-completion impact table.
+ * Task-specific logic in apply_task_effects() can further modify outcomes
+ * (inventory usage, conversions, conditional bonuses/penalties, etc.).
+ */
 static const TaskDelta kTaskDeltas[] = {
     {"Reading", 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0},
     {"Eating", 12, 5, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -103,6 +112,7 @@ static void diag_init(AgentDiagnostics *d) {
 }
 
 static void diag_free(AgentDiagnostics *d) {
+    /* `task_name` strings are owned by diagnostics and must be released. */
     for (int i = 0; i<d->n; i++) free(d->tasks[i].task_name);
     free(d->tasks);
     memset(d, 0, sizeof(*d));
@@ -123,6 +133,7 @@ static void diag_record_completion(AgentDiagnostics *d, const char *task_name) {
         return;
     }
     if (d->n == d->cap) {
+        /* Standard doubling growth keeps amortized append cost O(1). */
         d->cap = d->cap ? d->cap*2 : 8;
         d->tasks = xrealloc(d->tasks, (size_t)d->cap*sizeof(*d->tasks));
     }
@@ -174,6 +185,7 @@ static void collect_stmt_tasks(Stmt *s, VecStr *out) {
 }
 
 static void collect_character_tasks(Character *ch, VecStr *out) {
+    /* Flatten all rule sources into one unique task-name list for reporting. */
     VEC_INIT(*out);
     for (int i = 0; i<ch->thresholds.n; i++) collect_stmt_tasks(ch->thresholds.v[i].action, out);
     for (int i = 0; i<ch->blocks.n; i++) collect_stmt_list_tasks(&ch->blocks.v[i].stmts, out);
@@ -248,6 +260,10 @@ static int group_in_progress(Character *ch, const char *const *tasks, int ntasks
 }
 
 static void print_need_diagnostics(Character *ch, World *w, const AgentDiagnostics *d, const VecStr *planned) {
+    /*
+     * Curated task groups map core "needs" to concrete actions.
+     * This is intentionally heuristic and diagnostic-only.
+     */
     static const char *kNourishTasks[] = {"Eating", "Meal prep", "Cooking", "Fish cleaning", "Food preservation"};
     static const char *kHydrationTasks[] = {"Water collection", "Water filtration", "Eating"};
     static const char *kRestTasks[] = {"Sleeping", "Resting"};
@@ -327,6 +343,7 @@ static void print_agent_diagnostics(Character *ch, Catalog *cat, World *w, const
         }
     }
 
+    /* Tasks present in policy but never completed often reveal scheduler gaps. */
     int planned_not_done = 0;
     for (int i = 0; i<planned.n; i++) {
         if (diag_task_count(d, planned.v[i]) == 0) planned_not_done++;
@@ -379,6 +396,10 @@ static void plan_day_events(World *w, DayEvents *ev) {
         /* 6..21 */
         ev->breach_tick = t;
         double s = w->shelter.signature, st = w->shelter.structure;
+        /*
+         * Breach severity increases when the shelter is weak or the signature
+         * is loud; a small random bump keeps repeated days less deterministic.
+         */
         int lvl = 1;
         if (st<70 || s>15) lvl = 2;
         if (st<55 || s>25) lvl = 3;
@@ -393,6 +414,7 @@ static void clamp01_100(double *v) {
 }
 
 static void clamp_world(World *w) {
+    /* Keep world values inside sensible simulation bounds after each mutation. */
     if (w->shelter.power < 0) w->shelter.power = 0;
     if (w->shelter.power > 100) w->shelter.power = 100;
     if (w->shelter.water_safe < 0) w->shelter.water_safe = 0;
@@ -424,6 +446,7 @@ static double inv_consume(Inventory *inv, const char *key, double qty) {
     ItemEntry *e = inv_find(inv, key);
     if (!e || e->qty <= 0) return 0.0;
     if (qty > e->qty) qty = e->qty;
+    /* Return actual consumed amount so callers can scale downstream effects. */
     e->qty -= qty;
     if (e->qty < 0) e->qty = 0;
     return qty;
@@ -433,6 +456,12 @@ static double consume_world_water(World *w, double amount) {
     double used = 0.0;
     if (amount <= 0) return 0.0;
 
+    /*
+     * Preferred order:
+     * 1) safe tank water
+     * 2) bottled/packaged water inventory
+     * 3) raw water (fallback)
+     */
     if (w->shelter.water_safe > 0) {
         double take = amount;
         if (take > w->shelter.water_safe) take = w->shelter.water_safe;
@@ -475,6 +504,7 @@ static int consume_meal(World *w, double *hunger_gain, double *hydration_gain) {
         {"Canned corn", 1.0, 6.0, 0.5},
         {"Canned tuna", 1.0, 8.0, 0.0}
     };
+    /* First available food entry wins; table order encodes preference. */
     int n = (int)(sizeof(foods)/sizeof(foods[0]));
     for (int i = 0; i<n; i++) {
         double eaten = inv_consume(&w->inv, foods[i].name, foods[i].qty);
@@ -520,6 +550,13 @@ static void apply_task_delta(World *w, Character *ch, const TaskDelta *d) {
 }
 
 static void overnight_plant_tick(World *w) {
+    /*
+     * Nightly hydroponics pass:
+     * 1) update hydroponic health from actions/environment
+     * 2) optionally germinate seeds when empty
+     * 3) grow or decay plants
+     * 4) probabilistically harvest produce
+     */
     double plants = inv_stock(&w->inv, "Plant");
 
     if (inv_stock(&w->inv, "Hydroponic planter") > 0.0) w->hydroponic_health += 1.0;
@@ -584,6 +621,7 @@ static void overnight_plant_tick(World *w) {
 }
 
 static void tick_decay(Character *ch) {
+    /* Passive per-tick drift while awake in shelter conditions. */
     ch->hunger -= 0.8;
     ch->hydration -= 1.0;
     ch->morale -= 0.1;
@@ -620,6 +658,10 @@ static void apply_task_effects(World *w, Character *ch, const char *task) {
     const TaskDelta *d = find_task_delta(task);
     apply_task_delta(w, ch, d);
 
+    /*
+     * Task-specific branches model inventory/equipment interactions that cannot
+     * be represented as simple additive deltas.
+     */
     if (strcmp(task, "Eating")==0) {
         double h = 0.0;
         double hy = 0.0;
@@ -781,6 +823,7 @@ void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
             if (ev_overnight) printf("EVENT: overnight_threat_check ");
             printf("\n");
 
+            /* Phase 1: passive per-tick decay/fatigue updates. */
             tick_decay(A);
             tick_decay(B);
             fatigue_tick(A);
@@ -810,6 +853,7 @@ void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
                 }
             }
 
+            /* Phase 2: ask scheduler for a new action when agent is idle. */
             Candidate ca, cb;
             cand_reset(&ca);
             cand_reset(&cb);
@@ -832,7 +876,7 @@ void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
                 }
             }
 
-            /* start/continue */
+            /* Phase 3: start chosen tasks or report continuation/idle state. */
             if (A->rt_remaining==0) {
                 if (ca.kind==1) {
                     A->rt_task = ca.task_name;
@@ -863,7 +907,7 @@ void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
                 printf("    %s continues: %s (remaining %dt)\n", B->name, B->rt_task?B->rt_task:"(none)", B->rt_remaining);
             }
 
-            /* breach consequence */
+            /* Phase 4: resolve event consequences after action assignment. */
             if (ev_breach) {
                 int defended = 0;
                 if (A->rt_task && strstr(A->rt_task, "Defensive")!=NULL) defended = 1;
@@ -884,6 +928,7 @@ void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
             print_status(B);
 
             if (ev_overnight) {
+                /* Phase 5 (last tick only): overnight encounter + plant cycle. */
                 int roll = rand_percent();
                 if (roll < (int)(w->events.overnight_chance+0.5)) {
                     printf("    overnight_threat_check: contact outside (roll=%d < %.0f%%)\n", roll, w->events.overnight_chance);

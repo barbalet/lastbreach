@@ -8,6 +8,7 @@
 /* ---- Character sections ---- */
 
 static void parse_skills(Parser *ps, Character *ch) {
+    /* skills { name: number; ... } */
     ps_expect(ps, TK_LBRACE, "{");
     while (!ps_is(ps, TK_RBRACE)) {
         char *k = ps_expect_ident(ps, "skill name");
@@ -20,6 +21,7 @@ static void parse_skills(Parser *ps, Character *ch) {
     ps_expect(ps, TK_RBRACE, "}");
 }
 static void parse_traits(Parser *ps, Character *ch) {
+    /* traits: ["trait", ...]; */
     ps_expect(ps, TK_COLON, ":");
     ps_expect(ps, TK_LBRACK, "[");
     if (!ps_is(ps, TK_RBRACK)) {
@@ -37,6 +39,10 @@ static void parse_traits(Parser *ps, Character *ch) {
     ps_expect(ps, TK_SEMI, ";");
 }
 static void parse_defaults(Parser *ps, Character *ch) {
+    /*
+     * We currently apply only fields that affect runtime behavior directly.
+     * Unknown/default-only values are consumed to keep the parser forward-compatible.
+     */
     ps_expect(ps, TK_LBRACE, "{");
     while (!ps_is(ps, TK_RBRACE)) {
         char *k = ps_expect_ident(ps, "defaults key");
@@ -61,6 +67,7 @@ static void parse_defaults(Parser *ps, Character *ch) {
     ps_expect(ps, TK_RBRACE, "}");
 }
 static void parse_thresholds(Parser *ps, Character *ch) {
+    /* thresholds { when <expr> do <action>; ... } */
     ps_expect(ps, TK_LBRACE, "{");
     while (!ps_is(ps, TK_RBRACE)) {
         if (!ps_is_ident(ps, "when")) dief("%s:%d: expected when", ps->filename, ps->lx.cur.line);
@@ -78,6 +85,7 @@ static void parse_thresholds(Parser *ps, Character *ch) {
     ps_expect(ps, TK_RBRACE, "}");
 }
 static int parse_int_lit(Parser *ps) {
+    /* Plan ranges are integer-like and accept either NUMBER or DURATION tokens. */
     Token *t = &ps->lx.cur;
     if (ps_is(ps, TK_NUMBER)) {
         int v = (int)(t->num+0.5);
@@ -93,6 +101,12 @@ static int parse_int_lit(Parser *ps) {
     return 0;
 }
 static void parse_plan(Parser *ps, Character *ch) {
+    /*
+     * plan {
+     *   block <name> <start>..<end> { ... }
+     *   rule ["label"] priority <num> { ... }
+     * }
+     */
     ps_expect(ps, TK_LBRACE, "{");
     while (!ps_is(ps, TK_RBRACE)) {
         if (ps_is_ident(ps, "block")) {
@@ -176,6 +190,7 @@ void parse_character(Parser *ps, Character *out) {
     out->name = name;
     ps_expect(ps, TK_LBRACE, "{");
     while (!ps_is(ps, TK_RBRACE)) {
+        /* Parse sections in any order; unknown sections are treated as errors. */
         if (ps_is_ident(ps, "version")) {
             lx_next_token(&ps->lx);
             (void)ps_expect_number(ps, "version");

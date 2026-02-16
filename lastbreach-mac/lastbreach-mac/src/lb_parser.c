@@ -28,6 +28,7 @@ int ps_is_ident(Parser *ps, const char *s) {
     return (t->len==n && strncmp(t->start, s, (size_t)n)==0);
 }
 void ps_expect(Parser *ps, TokenKind k, const char *what) {
+    /* Unified error formatting keeps parser failures consistent and grep-friendly. */
     if (!ps_is(ps, k)) dief("%s:%d: expected %s", ps->filename, ps->lx.cur.line, what);
     lx_next_token(&ps->lx);
 }
@@ -45,6 +46,7 @@ char *ps_expect_string(Parser *ps, const char *what) {
 }
 double ps_expect_number(Parser *ps, const char *what) {
     Token *t = &ps->lx.cur;
+    /* Duration literals are allowed where numeric values are expected. */
     if (ps_is(ps, TK_NUMBER)) {
         double v = t->num;
         lx_next_token(&ps->lx);

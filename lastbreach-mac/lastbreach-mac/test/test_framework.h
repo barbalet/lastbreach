@@ -9,6 +9,7 @@
 
 typedef void (*test_fn_t)(void);
 
+/* Tiny xUnit-style harness API used by test_main.c and register_* files. */
 void test_begin_suite(const char *name);
 void test_run_case(const char *name, test_fn_t fn);
 int test_end_suite(void);

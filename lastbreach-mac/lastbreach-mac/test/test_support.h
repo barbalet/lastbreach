@@ -5,6 +5,7 @@
 #include "lb_parser_internal.h"
 #include "lb_runtime_internal.h"
 
+/* Helpers for parsing inline DSL snippets and running quiet simulations in tests. */
 void parse_character_text(const char *filename, const char *src, Character *out);
 void parse_world_text(const char *filename, const char *src, World *out);
 void parse_catalog_text(const char *filename, const char *src, Catalog *out);

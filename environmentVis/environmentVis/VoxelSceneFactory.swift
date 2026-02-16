@@ -2,12 +2,14 @@ import SceneKit
 import UIKit
 
 enum VoxelType: UInt8 {
+    /* Raw values must match VoxelRandomizer.c voxel encoding. */
     case water = 0
     case soil = 1
     case air = 2
 }
 
 enum SurfaceType: UInt8 {
+    /* Raw values must match VoxelRandomizer.c surface encoding. */
     case open = 0
     case trapdoorDoor = 1
     case windowSkylight = 2
@@ -15,6 +17,7 @@ enum SurfaceType: UInt8 {
 }
 
 enum CubeFace: Int, CaseIterable {
+    /* Ordering must stay synchronized with face vectors in VoxelRandomizer.c. */
     case front = 0
     case right = 1
     case back = 2
@@ -33,6 +36,7 @@ struct VoxelCell {
     }
 
     func surface(at face: CubeFace) -> SurfaceType {
+        /* Safe because `surfaces` is always built with CubeFace.allCases.count entries. */
         surfaces[face.rawValue]
     }
 }
@@ -70,6 +74,7 @@ enum VoxelSceneFactory {
         let voxelContainer = SCNNode()
         scene.rootNode.addChildNode(voxelContainer)
 
+        /* Build randomized voxel payload first, then scene graph around it. */
         let grid = makeGrid(size: size)
 
         addCamera(to: scene, size: size)
@@ -93,6 +98,7 @@ enum VoxelSceneFactory {
 
         randomTypes.withUnsafeMutableBufferPointer { typeBuffer in
             randomFaces.withUnsafeMutableBufferPointer { faceBuffer in
+                /* C generator fills both voxel material and per-face surface labels. */
                 lb_randomize_voxels(
                     size,
                     typeBuffer.baseAddress,
@@ -145,6 +151,7 @@ enum VoxelSceneFactory {
 
         cameraNode.camera = camera
 
+        /* Keep camera distance proportional to cube size for consistent framing. */
         let cubeWidth = Float(size) * 0.055
         cameraNode.position = SCNVector3(x: 0, y: 0, z: cubeWidth * 3.4)
 
@@ -152,6 +159,7 @@ enum VoxelSceneFactory {
     }
 
     private static func addLights(to scene: SCNScene) {
+        /* Three-point-ish setup: ambient + key + cool rim light for depth cues. */
         let ambientNode = SCNNode()
         let ambient = SCNLight()
         ambient.type = .ambient
@@ -191,6 +199,7 @@ enum VoxelSceneFactory {
                     let cell = grid[x][y][z]
                     let cellNode = SCNNode()
 
+                    /* Shell carries per-face materials (windows/walls/open/etc.). */
                     let shellGeometry = SCNBox(width: shellSize, height: shellSize, length: shellSize, chamferRadius: 0.0)
                     shellGeometry.materials = CubeFace.allCases.map { face in
                         surfaceMaterial(for: cell.surface(at: face))
@@ -199,6 +208,7 @@ enum VoxelSceneFactory {
                     cellNode.addChildNode(shellNode)
 
                     if cell.type != .air {
+                        /* Core box visualizes the actual voxel material (soil/water). */
                         let coreSize = shellSize * 0.78
                         let coreGeometry = SCNBox(width: coreSize, height: coreSize, length: coreSize, chamferRadius: 0.0)
                         coreGeometry.materials = [coreMaterial(for: cell.type)]
@@ -284,6 +294,7 @@ enum VoxelSceneFactory {
         material.transparency = 0.0
         material.blendMode = .alpha
         material.isDoubleSided = true
+        /* Open faces should never occlude neighboring geometry. */
         material.writesToDepthBuffer = false
         material.readsFromDepthBuffer = false
         return material
@@ -320,6 +331,7 @@ enum VoxelSceneFactory {
             )
 
             if innerTransparent {
+                /* Window/skylight: punch transparent opening through the panel. */
                 cg.setBlendMode(.clear)
                 cg.fillEllipse(in: innerOval)
                 cg.setBlendMode(.normal)
@@ -327,6 +339,7 @@ enum VoxelSceneFactory {
                 cg.setLineWidth(8)
                 cg.strokeEllipse(in: innerOval)
             } else {
+                /* Trapdoor/door: keep opaque inner panel. */
                 cg.setFillColor(innerColor.cgColor)
                 cg.fillEllipse(in: innerOval)
                 cg.setStrokeColor(frameColor.cgColor)

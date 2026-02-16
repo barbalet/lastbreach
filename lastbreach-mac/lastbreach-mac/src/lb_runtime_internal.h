@@ -21,6 +21,7 @@ typedef struct {
     int tick, day;
     int breach_level;
     int ev_breach, ev_overnight;
+    /* Rule-local variable bindings set via `let`. */
     VecStr keys;
     VecDbl vals;
 } EvalCtx;
@@ -43,6 +44,7 @@ int truthy(double v);
 double eval_expr(EvalCtx *ctx, Expr *e);
 
 void cand_reset(Candidate *c);
+/* Core scheduler entry: returns a concrete task or an explicit yield candidate. */
 Candidate choose_action(Character *ch, World *w, Catalog *cat, int day, int tick, int breach_level, int ev_breach, int ev_overnight);
 
 #endif

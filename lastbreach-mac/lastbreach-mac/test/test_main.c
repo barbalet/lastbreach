@@ -5,6 +5,7 @@ void register_parser_eval_tests(void);
 void register_scheduler_sim_tests(void);
 
 int main(void) {
+    /* Explicit registration keeps suite order deterministic in CI output. */
     test_begin_suite("lastbreach unit tests");
     register_core_tests();
     register_parser_eval_tests();

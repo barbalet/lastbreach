@@ -22,6 +22,7 @@ char *read_entire_file(const char *path) {
     char *buf = (char*)xmalloc((size_t)n+1);
     size_t rd = fread(buf, 1, (size_t)n, f);
     fclose(f);
+    /* Null-terminate even when fewer bytes are read than expected. */
     buf[rd] = 0;
     return buf;
 }

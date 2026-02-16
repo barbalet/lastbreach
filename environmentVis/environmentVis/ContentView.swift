@@ -2,6 +2,7 @@ import SwiftUI
 import SceneKit
 
 struct ContentView: View {
+    /* Scene is built once for this view instance to keep camera controls smooth. */
     private let scene = VoxelSceneFactory.makeScene(size: 7)
 
     var body: some View {
@@ -14,6 +15,7 @@ struct ContentView: View {
             .ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 6) {
+                /* Overlay doubles as an in-app legend for generation rules. */
                 Text("environmentVis")
                     .font(.headline)
                     .foregroundStyle(.white)

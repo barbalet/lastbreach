@@ -65,6 +65,7 @@ void seed_default_catalog(Catalog *cat) {
         {"Water filtration", 2, "wash"},
     }
     ;
+    /* Keep this list aligned with data/tasks.txt and test expectations. */
     int n = (int)(sizeof(defs)/sizeof(defs[0]));
     for (int i = 0; i<n; i++) {
         TaskDef *t = cat_get_or_add_task(cat, defs[i].name);

@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 void parse_character_text(const char *filename, const char *src, Character *out) {
+    /* Tests pass stack strings; parser expects mutable storage. */
     char *buf = xstrdup(src);
     Parser ps;
     ps_init(&ps, filename, buf);
@@ -32,6 +33,7 @@ Expr *parse_expr_text(const char *filename, const char *src, char **storage) {
 }
 
 void run_sim_quiet(World *w, Catalog *cat, Character *a, Character *b, int days) {
+    /* Redirect stdout so tests can assert on state without log noise. */
     int stdout_fd = dup(fileno(stdout));
     int devnull_fd = open("/dev/null", O_WRONLY);
 
@@ -54,6 +56,7 @@ void run_sim_quiet(World *w, Catalog *cat, Character *a, Character *b, int days)
 }
 
 char *trim_ws(char *s) {
+    /* In-place trim helper used when scanning fixture files line-by-line. */
     char *end;
     while (*s && isspace((unsigned char)*s)) s++;
     end = s + strlen(s);

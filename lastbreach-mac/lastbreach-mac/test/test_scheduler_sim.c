@@ -51,6 +51,7 @@ static const char *kGrowerSrc =
     "}\n";
 
 static void seed_world_and_catalog(World *w, Catalog *cat) {
+    /* Neutralize random event pressure so tests remain deterministic. */
     world_init(w);
     cat_init(cat);
     seed_default_catalog(cat);
@@ -59,6 +60,10 @@ static void seed_world_and_catalog(World *w, Catalog *cat) {
 }
 
 static void test_choose_action_precedence(void) {
+    /*
+     * Priority order under test:
+     * breach handler > threshold rule > plan/rule fallback.
+     */
     Character ch;
     World w;
     Catalog cat;
@@ -86,6 +91,7 @@ static void test_choose_action_precedence(void) {
 }
 
 static void test_run_sim_cooked_food_bonus(void) {
+    /* Cooked portions should provide stronger nutrition than equivalent raw food. */
     World w_raw, w_cooked;
     Catalog cat_raw, cat_cooked;
     Character a_raw, b_raw, a_cooked, b_cooked;
@@ -127,6 +133,7 @@ static void test_run_sim_cooked_food_bonus(void) {
 }
 
 static void test_run_sim_hydroponics_produce(void) {
+    /* A watered/maintained setup should yield at least some produce in one day. */
     World w;
     Catalog cat;
     Character grower, helper;

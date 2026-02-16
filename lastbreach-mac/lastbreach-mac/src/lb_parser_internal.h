@@ -13,7 +13,9 @@
  */
 
 Expr *parse_expr(Parser *ps);
+/* Parses "task ...", "set ...", "yield_tick", etc. (without trailing semicolon handling). */
 Stmt *parse_action_stmt(Parser *ps);
+/* Parses a brace-delimited statement sequence until '}' or EOF. */
 void parse_stmt_list(Parser *ps, VecStmtPtr *out);
 
 #endif

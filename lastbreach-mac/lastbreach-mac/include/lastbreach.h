@@ -123,9 +123,11 @@ typedef struct {
     Shelter shelter;
     Inventory inv;
     WorldEvents events;
+    /* Hydroponics subsystem status consumed by simulation night pass. */
     double hydroponic_health;
     int plants_watered_today;
     int hydroponics_maintained_today;
+    /* Portion count used to apply cooked-food nutrition bonuses. */
     double cooked_food_portions;
 } World;
 

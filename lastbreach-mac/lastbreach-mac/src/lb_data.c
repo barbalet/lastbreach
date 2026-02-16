@@ -10,6 +10,7 @@
  */
 
 static void skip_block(Parser *ps) {
+    /* Generic balanced-brace skipper for unsupported nested DSL sections. */
     int depth = 0;
     if (ps_is(ps, TK_LBRACE)) {
         ps_expect(ps, TK_LBRACE, "{");
@@ -30,6 +31,7 @@ static void skip_block(Parser *ps) {
     }
 }
 static void skip_until_semi(Parser *ps) {
+    /* Used to ignore optional clauses such as "when ..." that we do not evaluate here. */
     while (!ps_is(ps, TK_SEMI) && !ps_is(ps, TK_EOF)) lx_next_token(&ps->lx);
 }
 
@@ -37,6 +39,7 @@ static void skip_until_semi(Parser *ps) {
 void parse_world(World *w, const char *filename, char *src) {
     Parser ps;
     ps_init(&ps, filename, src);
+    /* Allow files with preamble content before the world block. */
     while (!ps_is(&ps, TK_EOF) && !ps_is_ident(&ps, "world")) lx_next_token(&ps.lx);
     if (ps_is(&ps, TK_EOF)) return;
     lx_next_token(&ps.lx);
@@ -60,6 +63,7 @@ void parse_world(World *w, const char *filename, char *src) {
                 ps_expect(&ps, TK_COLON, ":");
                 double v = ps_expect_number(&ps, "number");
                 ps_expect(&ps, TK_SEMI, ";");
+                /* Apply only shelter keys the runtime currently models. */
                 if (strcmp(k, "temp_c")==0) w->shelter.temp_c = v;
                 else if (strcmp(k, "signature")==0) w->shelter.signature = v;
                 else if (strcmp(k, "power")==0) w->shelter.power = v;
@@ -89,6 +93,7 @@ void parse_world(World *w, const char *filename, char *src) {
                     cond = ps_expect_number(&ps, "cond");
                 }
                 ps_expect(&ps, TK_SEMI, ";");
+                /* Repeated item lines accumulate quantity and best condition. */
                 inv_add(&w->inv, item, qty, cond);
                 free(item);
             }
@@ -110,6 +115,10 @@ void parse_world(World *w, const char *filename, char *src) {
                         skip_until_semi(&ps);
                     }
                     ps_expect(&ps, TK_SEMI, ";");
+                    /*
+                     * Only events consumed by the simulator are persisted.
+                     * Unknown daily events are parsed/ignored for compatibility.
+                     */
                     if (strcmp(ename, "breach")==0) w->events.breach_chance = ch;
                     free(ename);
                     continue;
@@ -132,7 +141,7 @@ void parse_world(World *w, const char *filename, char *src) {
             ps_expect(&ps, TK_RBRACE, "}");
             continue;
         }
-        /* ignore other blocks (constants/weather/...) */
+        /* Ignore other blocks (constants/weather/...) while staying token-synchronized. */
         if (ps_is(&ps, TK_IDENT)) {
             char *k = ps_expect_ident(&ps, "ident");
             if (ps_is(&ps, TK_LBRACE)) skip_block(&ps);
@@ -161,6 +170,7 @@ void parse_catalog(Catalog *cat, const char *filename, char *src) {
             free(tname);
             ps_expect(&ps, TK_LBRACE, "{");
             while (!ps_is(&ps, TK_RBRACE)) {
+                /* Keep taskdef parsing permissive: consume known fields, tolerate extras. */
                 if (ps_is_ident(&ps, "time")) {
                     lx_next_token(&ps.lx);
                     ps_expect(&ps, TK_COLON, ":");
@@ -192,12 +202,12 @@ void parse_catalog(Catalog *cat, const char *filename, char *src) {
                         if (ps_is(&ps, TK_SEMI)) ps_expect(&ps, TK_SEMI, ";");
                     }
 
-                    /** if function. */
+                    /* Nested object payload for unsupported fields. */
                     else if (ps_is(&ps, TK_LBRACE)) {
                         skip_block(&ps);
                     }
 
-                    /** if function. */
+                    /* Bare marker field terminated with semicolon. */
                     else if (ps_is(&ps, TK_SEMI)) {
                         ps_expect(&ps, TK_SEMI, ";");
                     } else {

@@ -8,4 +8,6 @@
  *  - lb_eval.c      : expression evaluation
  *  - lb_scheduler.c : action selection
  *  - lb_sim.c       : simulation loop
+ *
+ * This unit intentionally contains no executable code; it documents the split.
  */

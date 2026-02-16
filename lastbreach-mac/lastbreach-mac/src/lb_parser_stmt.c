@@ -26,6 +26,7 @@ Stmt *parse_action_stmt(Parser *ps) {
         s->u.task.for_ticks = NULL;
         s->u.task.priority = NULL;
         for (;;) {
+            /* task "...": parse optional modifiers in any order until ';'. */
             if (ps_is_ident(ps, "for")) {
                 lx_next_token(&ps->lx);
                 s->u.task.for_ticks = parse_expr(ps);
@@ -66,6 +67,7 @@ Stmt *parse_action_stmt(Parser *ps) {
                         continue;
                     }
                     /* fallthrough: consume one expression if present */
+                    /* Fallback: consume one expression payload and keep going. */
                     if (!ps_is(ps, TK_SEMI)) (void)parse_expr(ps);
                     continue;
                 }
@@ -87,6 +89,10 @@ Stmt *parse_action_stmt(Parser *ps) {
         char *buf = (char*)xmalloc(cap);
         strcpy(buf, lhs);
         free(lhs);
+        /*
+         * Support dotted lvalues like defaults.defense_posture by rebuilding
+         * the full path into one string key.
+         */
         while (ps_is(ps, TK_DOT)) {
             ps_expect(ps, TK_DOT, ".");
             char *part = ps_expect_ident(ps, "identifier");
@@ -167,6 +173,7 @@ static Stmt *parse_stmt(Parser *ps) {
     return a;
 }
 void parse_stmt_list(Parser *ps, VecStmtPtr *out) {
+    /* Caller owns surrounding braces; this scans until matching '}' or EOF. */
     while (!ps_is(ps, TK_RBRACE) && !ps_is(ps, TK_EOF)) {
         Stmt *s = parse_stmt(ps);
         VEC_PUSH(*out, s);

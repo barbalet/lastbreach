@@ -20,6 +20,7 @@ void dief(const char *fmt, ...) {
     exit(1);
 }
 void *xmalloc(size_t n) {
+    /* Centralized OOM handling keeps call sites uncluttered. */
     void *p = malloc(n);
     if (!p) dief("out of memory");
     return p;

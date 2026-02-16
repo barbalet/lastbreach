@@ -15,6 +15,7 @@ void inv_init(Inventory *inv) {
     VEC_INIT(inv->items);
 }
 ItemEntry *inv_find(Inventory *inv, const char *key) {
+    /* Inventory is small enough that linear scan remains straightforward. */
     for (int i = 0; i<inv->items.n; i++) if (strcmp(inv->items.v[i].key, key)==0) return &inv->items.v[i];
     return NULL;
 }
@@ -29,6 +30,7 @@ void inv_add(Inventory *inv, const char *key, double qty, double cond) {
         ne.best_cond = cond;
         VEC_PUSH(inv->items, ne);
     } else {
+        /* Condition tracks "best seen quality", not weighted average quality. */
         e->qty += qty;
         if (cond > e->best_cond) e->best_cond = cond;
     }

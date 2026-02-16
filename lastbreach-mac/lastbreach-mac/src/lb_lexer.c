@@ -26,6 +26,13 @@ static int lx_match(Lexer *lx, int c) {
     return 0;
 }
 static void lx_skip(Lexer *lx) {
+    /*
+     * Skip insignificant input between tokens:
+     * - whitespace
+     * - shell-style comments (#...)
+     * - C++-style comments (//...)
+     * - C-style block comments (slash-star ... star-slash)
+     */
     for (;;) {
         int c = lx_peek(lx);
         if (c==0) return;
@@ -81,6 +88,7 @@ static void lx_read_string(Lexer *lx) {
     int line0 = lx->line;
     size_t p0 = lx->pos;
     for (;;) {
+        /* Strings are lexed raw; escape handling is deferred to parser/runtime. */
         int c = lx_next(lx);
         if (c==0) dief("unterminated string at line %d", line0);
         if (c=='"') break;
@@ -117,6 +125,11 @@ static void lx_read_number(Lexer *lx, int first) {
         break;
     }
     buf[bi] = 0;
+    /*
+     * DSL-specific numeric suffixes are converted into dedicated token kinds:
+     * - 45%  -> TK_PERCENT
+     * - 3t   -> TK_DURATION
+     */
     if (lx_peek(lx)=='%') {
         lx_next(lx);
         lx->cur = tk_make(lx, TK_PERCENT, NULL, 0);
@@ -148,6 +161,10 @@ void lx_next_token(Lexer *lx) {
         return;
     }
     const char *s = &lx->src[lx->pos-1];
+    /*
+     * Single-character punctuation and operators are handled first; complex
+     * multi-char forms (==, <=, .., etc.) are resolved via lx_match.
+     */
     switch (c) {
     case '{':
         lx->cur = tk_make(lx, TK_LBRACE, s, 1);

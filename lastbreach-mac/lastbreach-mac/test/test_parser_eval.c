@@ -2,6 +2,7 @@
 #include "test_support.h"
 
 static void test_lexer_tokens(void) {
+    /* Covers literal/token edge cases, comment skipping, and operator lexing. */
     char *src = xstrdup("alpha 12 3t 45% /* skip */ \"hello\" .. <= >= != == # done\n");
     Lexer lx;
     char *tok;
@@ -53,6 +54,7 @@ static void test_lexer_tokens(void) {
 }
 
 static void test_parse_world_and_catalog(void) {
+    /* Ensures parser consumes known fields and safely ignores unknown ones. */
     const char *catalog_src =
         "taskdef \"Custom\" { time: 3t; station: bench; ignores: { x: 1; }; }\n"
         "taskdef \"Minimal\" { station: lab; }\n"
@@ -98,6 +100,7 @@ static void test_parse_world_and_catalog(void) {
 }
 
 static void test_parse_character_sections(void) {
+    /* Smoke-tests all major character sections in a single DSL fixture. */
     const char *ch_src =
         "character \"Unit\" {\n"
         "  version 1;\n"
@@ -145,6 +148,7 @@ static void test_parse_character_sections(void) {
 }
 
 static void test_eval_expressions(void) {
+    /* Validates arithmetic, built-ins, booleans, and runtime variable access. */
     World w;
     Character ch;
     EvalCtx ctx;
@@ -197,6 +201,7 @@ static void test_eval_expressions(void) {
 }
 
 static void test_parse_task_optional_clauses(void) {
+    /* Optional task clauses should parse without changing core task fields. */
     const char *src =
         "character \"Clauses\" {\n"
         "  version 1;\n"
@@ -236,6 +241,7 @@ static void test_parse_task_optional_clauses(void) {
 }
 
 void register_parser_eval_tests(void) {
+    /* Keep registration order aligned with parser/eval workflow complexity. */
     test_run_case("lexer tokens", test_lexer_tokens);
     test_run_case("parse world/catalog", test_parse_world_and_catalog);
     test_run_case("parse character sections", test_parse_character_sections);
