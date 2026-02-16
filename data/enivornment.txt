@@ -1,0 +1,13 @@
+Trapdoor (lockable)
+Door (lockable)
+
+Skylight
+Window
+
+Floor
+Wall
+
+Ladder
+Shelving
+
+Openning (Void)
