@@ -60,7 +60,7 @@ enum VoxelSceneFactory {
 
     private static let waterCoreMaterial = makeCoreMaterial(
         color: UIColor(red: 0.18, green: 0.58, blue: 0.98, alpha: 1.0),
-        transparency: 0.42,
+        transparency: 0.2,
         roughness: 0.06
     )
 
