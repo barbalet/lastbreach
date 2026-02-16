@@ -7,7 +7,7 @@ Window
 Floor
 Wall
 
+Openning (Void)
+
 Ladder
 Shelving
-
-Openning (Void)
