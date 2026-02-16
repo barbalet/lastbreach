@@ -387,6 +387,126 @@ static void lb_assign_surfaces_from_transitions(
     }
 }
 
+enum {
+    LB_FACE_FRONT = 0,
+    LB_FACE_RIGHT = 1,
+    LB_FACE_BACK = 2,
+    LB_FACE_LEFT = 3,
+    LB_FACE_TOP = 4,
+    LB_FACE_BOTTOM = 5
+};
+
+static void lb_set_surface_at(
+    size_t grid_size,
+    uint8_t *surfaces_out,
+    size_t faces_per_cell,
+    size_t x,
+    size_t y,
+    size_t z,
+    size_t face,
+    uint8_t surface_type
+) {
+    if (
+        surfaces_out == NULL ||
+        x >= grid_size ||
+        y >= grid_size ||
+        z >= grid_size ||
+        face >= faces_per_cell
+    ) {
+        return;
+    }
+
+    size_t index = lb_voxel_index(grid_size, x, y, z);
+    surfaces_out[(index * faces_per_cell) + face] = surface_type;
+}
+
+static void lb_apply_window_layout(
+    size_t grid_size,
+    uint8_t *surfaces_out,
+    size_t faces_per_cell,
+    int32_t water_level,
+    size_t center_start_x,
+    size_t center_end_x,
+    size_t center_start_z,
+    size_t center_end_z
+) {
+    if (grid_size == 0 || surfaces_out == NULL || faces_per_cell < 6) {
+        return;
+    }
+
+    size_t cell_count = grid_size * grid_size * grid_size;
+    for (size_t i = 0; i < cell_count; i++) {
+        uint8_t *surface_start = surfaces_out + (i * faces_per_cell);
+        for (size_t face = 0; face < 6; face++) {
+            if (surface_start[face] == 2) {
+                surface_start[face] = 3; // remove all default windows first
+            }
+        }
+    }
+
+    // Require an inner core with perimeter so no windows appear on outer cube edges.
+    if (
+        center_start_x == 0 ||
+        center_start_z == 0 ||
+        center_end_x >= grid_size ||
+        center_end_z >= grid_size
+    ) {
+        return;
+    }
+
+    int32_t max_y = (int32_t)grid_size - 1;
+    int32_t window_start_y = lb_clamp_int32(water_level + 1, 1, max_y);
+    int32_t window_end_y = lb_clamp_int32(water_level + 2, window_start_y, max_y);
+
+    // Vertical window band: two voxels above the waterline around the open core.
+    for (int32_t y = window_start_y; y <= window_end_y; y++) {
+        size_t uy = (size_t)y;
+
+        for (size_t z = center_start_z; z < center_end_z; z++) {
+            size_t min_x = center_start_x;
+            size_t max_x = center_end_x - 1;
+
+            lb_set_surface_at(grid_size, surfaces_out, faces_per_cell, min_x, uy, z, LB_FACE_LEFT, 2);
+            lb_set_surface_at(grid_size, surfaces_out, faces_per_cell, min_x - 1, uy, z, LB_FACE_RIGHT, 2);
+
+            lb_set_surface_at(grid_size, surfaces_out, faces_per_cell, max_x, uy, z, LB_FACE_RIGHT, 2);
+            lb_set_surface_at(grid_size, surfaces_out, faces_per_cell, max_x + 1, uy, z, LB_FACE_LEFT, 2);
+        }
+
+        for (size_t x = center_start_x; x < center_end_x; x++) {
+            size_t min_z = center_start_z;
+            size_t max_z = center_end_z - 1;
+
+            lb_set_surface_at(grid_size, surfaces_out, faces_per_cell, x, uy, min_z, LB_FACE_BACK, 2);
+            lb_set_surface_at(grid_size, surfaces_out, faces_per_cell, x, uy, min_z - 1, LB_FACE_FRONT, 2);
+
+            lb_set_surface_at(grid_size, surfaces_out, faces_per_cell, x, uy, max_z, LB_FACE_FRONT, 2);
+            lb_set_surface_at(grid_size, surfaces_out, faces_per_cell, x, uy, max_z + 1, LB_FACE_BACK, 2);
+        }
+    }
+
+    // Skylight ceiling over the open core.
+    size_t ceiling_y = (size_t)window_end_y;
+    for (size_t x = center_start_x; x < center_end_x; x++) {
+        for (size_t z = center_start_z; z < center_end_z; z++) {
+            lb_set_surface_at(grid_size, surfaces_out, faces_per_cell, x, ceiling_y, z, LB_FACE_TOP, 2);
+            if (ceiling_y + 1 < grid_size) {
+                lb_set_surface_at(
+                    grid_size,
+                    surfaces_out,
+                    faces_per_cell,
+                    x,
+                    ceiling_y + 1,
+                    z,
+                    LB_FACE_BOTTOM,
+                    2
+                );
+            }
+        }
+    }
+
+}
+
 void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *surfaces_out, size_t faces_per_cell) {
     if (grid_size == 0 || voxel_types_out == NULL || surfaces_out == NULL || faces_per_cell == 0) {
         return;
@@ -430,6 +550,16 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
             voxel_types_out[i] = 2; // air
         }
         lb_assign_surfaces_from_transitions(grid_size, voxel_types_out, surfaces_out, faces_per_cell);
+        lb_apply_window_layout(
+            grid_size,
+            surfaces_out,
+            faces_per_cell,
+            0,
+            center_start_x,
+            center_end_x,
+            center_start_z,
+            center_end_z
+        );
         return;
     }
 
@@ -558,6 +688,16 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
     }
 
     lb_assign_surfaces_from_transitions(grid_size, voxel_types_out, surfaces_out, faces_per_cell);
+    lb_apply_window_layout(
+        grid_size,
+        surfaces_out,
+        faces_per_cell,
+        water_level,
+        center_start_x,
+        center_end_x,
+        center_start_z,
+        center_end_z
+    );
 
     free(soil_tops);
 }
