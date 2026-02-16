@@ -365,6 +365,17 @@ static void lb_assign_surfaces_from_transitions(
                         int32_t nx = (int32_t)x + face_dx[face];
                         int32_t ny = (int32_t)y + face_dy[face];
                         int32_t nz = (int32_t)z + face_dz[face];
+                        if (
+                            nx < 0 ||
+                            ny < 0 ||
+                            nz < 0 ||
+                            (size_t)nx >= grid_size ||
+                            (size_t)ny >= grid_size ||
+                            (size_t)nz >= grid_size
+                        ) {
+                            surface_start[face] = 0; // no surface types on outside of the cube
+                            continue;
+                        }
                         uint8_t adjacent_type = lb_voxel_type_at(grid_size, voxel_types, nx, ny, nz);
                         surface_start[face] = lb_surface_type_from_transition(current_type, adjacent_type);
                     } else {
