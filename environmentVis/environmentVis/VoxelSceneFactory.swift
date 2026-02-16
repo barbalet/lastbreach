@@ -181,7 +181,8 @@ enum VoxelSceneFactory {
 
     private static func addVoxels(to root: SCNNode, grid: [[[VoxelCell]]], size: Int) {
         let unit = CGFloat(0.05)
-        let spacing = unit * 1.03
+        let spacing = unit
+        let shellSize = unit * 1.04
         let centerOffset = (CGFloat(size - 1) * spacing) / 2.0
 
         for x in 0..<size {
@@ -190,7 +191,7 @@ enum VoxelSceneFactory {
                     let cell = grid[x][y][z]
                     let cellNode = SCNNode()
 
-                    let shellGeometry = SCNBox(width: unit, height: unit, length: unit, chamferRadius: 0.0)
+                    let shellGeometry = SCNBox(width: shellSize, height: shellSize, length: shellSize, chamferRadius: 0.0)
                     shellGeometry.materials = CubeFace.allCases.map { face in
                         surfaceMaterial(for: cell.surface(at: face))
                     }
@@ -198,7 +199,7 @@ enum VoxelSceneFactory {
                     cellNode.addChildNode(shellNode)
 
                     if cell.type != .air {
-                        let coreSize = unit * 0.78
+                        let coreSize = shellSize * 0.78
                         let coreGeometry = SCNBox(width: coreSize, height: coreSize, length: coreSize, chamferRadius: 0.0)
                         coreGeometry.materials = [coreMaterial(for: cell.type)]
                         let coreNode = SCNNode(geometry: coreGeometry)
