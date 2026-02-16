@@ -533,8 +533,8 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
                 size_t index = lb_voxel_index(grid_size, x, y, z);
 
                 uint8_t voxel_type = 2; // air
-                if (is_center_air) {
-                    voxel_type = 2; // central 4/5 x 4/5 core kept as air to the top
+                if (is_center_air && y > 0) {
+                    voxel_type = 2; // central 4/5 x 4/5 core is air above the bottom layer
                 } else if ((int32_t)y <= soil_top) {
                     voxel_type = 1; // soil
                 } else if ((int32_t)y <= water_level) {

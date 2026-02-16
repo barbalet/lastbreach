@@ -32,7 +32,7 @@ struct ContentView: View {
                 Text("Small soil spikes may pierce the top air (<30% coverage)")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.74))
-                Text("Center 4-5 by 4-5 columns are air to the top")
+                Text("Center 4-5 by 4-5 columns are air above the bottom layer")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.74))
                 Text("Air<->water faces are windows; soil<->air faces are walls")
