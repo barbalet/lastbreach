@@ -307,6 +307,75 @@ static uint8_t lb_random_surface_type(void) {
     return 3; // floor/wall
 }
 
+static uint8_t lb_voxel_type_at(
+    size_t grid_size,
+    const uint8_t *voxel_types,
+    int32_t x,
+    int32_t y,
+    int32_t z
+) {
+    if (x < 0 || y < 0 || z < 0) {
+        return 2; // outside bounds is treated as air
+    }
+
+    if ((size_t)x >= grid_size || (size_t)y >= grid_size || (size_t)z >= grid_size) {
+        return 2; // outside bounds is treated as air
+    }
+
+    size_t index = lb_voxel_index(grid_size, (size_t)x, (size_t)y, (size_t)z);
+    return voxel_types[index];
+}
+
+static uint8_t lb_surface_type_from_transition(uint8_t current_type, uint8_t adjacent_type) {
+    if ((current_type == 2 && adjacent_type == 0) || (current_type == 0 && adjacent_type == 2)) {
+        return 2; // air <-> water => window/skylight
+    }
+
+    if ((current_type == 2 && adjacent_type == 1) || (current_type == 1 && adjacent_type == 2)) {
+        return 3; // air <-> soil => floor/wall
+    }
+
+    return 0; // open for all other transitions for now
+}
+
+static void lb_assign_surfaces_from_transitions(
+    size_t grid_size,
+    const uint8_t *voxel_types,
+    uint8_t *surfaces_out,
+    size_t faces_per_cell
+) {
+    if (grid_size == 0 || voxel_types == NULL || surfaces_out == NULL || faces_per_cell == 0) {
+        return;
+    }
+
+    // Matches CubeFace ordering in Swift: front, right, back, left, top, bottom.
+    static const int32_t face_dx[6] = {0, 1, 0, -1, 0, 0};
+    static const int32_t face_dy[6] = {0, 0, 0, 0, 1, -1};
+    static const int32_t face_dz[6] = {1, 0, -1, 0, 0, 0};
+
+    for (size_t x = 0; x < grid_size; x++) {
+        for (size_t y = 0; y < grid_size; y++) {
+            for (size_t z = 0; z < grid_size; z++) {
+                size_t index = lb_voxel_index(grid_size, x, y, z);
+                uint8_t current_type = voxel_types[index];
+                uint8_t *surface_start = surfaces_out + (index * faces_per_cell);
+
+                for (size_t face = 0; face < faces_per_cell; face++) {
+                    if (face < 6) {
+                        int32_t nx = (int32_t)x + face_dx[face];
+                        int32_t ny = (int32_t)y + face_dy[face];
+                        int32_t nz = (int32_t)z + face_dz[face];
+                        uint8_t adjacent_type = lb_voxel_type_at(grid_size, voxel_types, nx, ny, nz);
+                        surface_start[face] = lb_surface_type_from_transition(current_type, adjacent_type);
+                    } else {
+                        surface_start[face] = lb_random_surface_type();
+                    }
+                }
+            }
+        }
+    }
+}
+
 void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *surfaces_out, size_t faces_per_cell) {
     if (grid_size == 0 || voxel_types_out == NULL || surfaces_out == NULL || faces_per_cell == 0) {
         return;
@@ -348,11 +417,8 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
         size_t cell_count = grid_size * grid_size * grid_size;
         for (size_t i = 0; i < cell_count; i++) {
             voxel_types_out[i] = 2; // air
-            uint8_t *surface_start = surfaces_out + (i * faces_per_cell);
-            for (size_t face = 0; face < faces_per_cell; face++) {
-                surface_start[face] = lb_random_surface_type();
-            }
         }
+        lb_assign_surfaces_from_transitions(grid_size, voxel_types_out, surfaces_out, faces_per_cell);
         return;
     }
 
@@ -476,14 +542,11 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
                 }
 
                 voxel_types_out[index] = voxel_type;
-
-                uint8_t *surface_start = surfaces_out + (index * faces_per_cell);
-                for (size_t face = 0; face < faces_per_cell; face++) {
-                    surface_start[face] = lb_random_surface_type();
-                }
             }
         }
     }
+
+    lb_assign_surfaces_from_transitions(grid_size, voxel_types_out, surfaces_out, faces_per_cell);
 
     free(soil_tops);
 }
