@@ -72,11 +72,16 @@ enum VoxelSceneFactory {
         roughness: 0.84
     )
 
-    private static let waterCoreMaterial = makeCoreMaterial(
-        color: UIColor(red: 0.18, green: 0.58, blue: 0.98, alpha: 1.0),
-        transparency: 0.2,
-        roughness: 0.06
-    )
+    private static let waterCoreMaterial: SCNMaterial = {
+        let material = makeCoreMaterial(
+            color: UIColor(red: 0.18, green: 0.58, blue: 0.98, alpha: 1.0),
+            transparency: 0.16,
+            roughness: 0.06
+        )
+        /* Keep stacked water readable; writing depth here blocks farther translucent voxels. */
+        material.writesToDepthBuffer = false
+        return material
+    }()
 
     static func makeScene(size: Int) -> SCNScene {
         let scene = SCNScene()
