@@ -43,7 +43,7 @@ struct ContentView: View {
                 Text("A skylight ceiling of windows spans the open core")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.74))
-                Text("Each side face gets a single door from soil up into air where possible")
+                Text("Each dome side gets one top door: two air voxels above a two-voxel soil base")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.74))
                 Text("Faces = open, trapdoor/door, window/skylight, floor/wall")
