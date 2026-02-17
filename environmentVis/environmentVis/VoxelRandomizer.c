@@ -111,6 +111,29 @@ static int lb_is_in_center_air(
     return x >= center_start_x && x < center_end_x && z >= center_start_z && z < center_end_z;
 }
 
+static int lb_is_adjacent_to_center_air(
+    size_t x,
+    size_t z,
+    size_t center_start_x,
+    size_t center_end_x,
+    size_t center_start_z,
+    size_t center_end_z
+) {
+    if (center_start_x > 0 && x == center_start_x - 1 && z >= center_start_z && z < center_end_z) {
+        return 1;
+    }
+    if (x == center_end_x && z >= center_start_z && z < center_end_z) {
+        return 1;
+    }
+    if (center_start_z > 0 && z == center_start_z - 1 && x >= center_start_x && x < center_end_x) {
+        return 1;
+    }
+    if (z == center_end_z && x >= center_start_x && x < center_end_x) {
+        return 1;
+    }
+    return 0;
+}
+
 static void lb_adjust_soil_to_target(
     int32_t *soil_tops,
     size_t column_count,
@@ -312,6 +335,93 @@ static void lb_add_top_air_soil_spikes(
     }
 
     free(spike_markers);
+}
+
+static void lb_add_dome_soil_paths(
+    int32_t *soil_tops,
+    size_t grid_size,
+    int32_t water_level,
+    size_t center_start_x,
+    size_t center_end_x,
+    size_t center_start_z,
+    size_t center_end_z
+) {
+    /*
+     * Replace one or two water voxels with soil beside the center shaft so at
+     * least a small soil path can originate from the dome perimeter.
+     */
+    if (
+        soil_tops == NULL ||
+        grid_size == 0 ||
+        water_level <= 0 ||
+        center_end_x >= grid_size ||
+        center_end_z >= grid_size
+    ) {
+        return;
+    }
+
+    size_t column_count = grid_size * grid_size;
+    size_t *candidates = (size_t *)malloc(column_count * sizeof(size_t));
+    if (candidates == NULL) {
+        return;
+    }
+
+    size_t candidate_count = 0;
+    for (size_t x = 0; x < grid_size; x++) {
+        for (size_t z = 0; z < grid_size; z++) {
+            if (
+                !lb_is_adjacent_to_center_air(
+                    x,
+                    z,
+                    center_start_x,
+                    center_end_x,
+                    center_start_z,
+                    center_end_z
+                )
+            ) {
+                continue;
+            }
+
+            size_t column_index = (x * grid_size) + z;
+            int32_t top = soil_tops[column_index];
+            if (top >= 0 && top < water_level) {
+                candidates[candidate_count++] = column_index;
+            }
+        }
+    }
+
+    if (candidate_count == 0) {
+        free(candidates);
+        return;
+    }
+
+    size_t replacement_target = lb_random_size_t(1, 2);
+    if (replacement_target > candidate_count) {
+        replacement_target = candidate_count;
+    }
+
+    size_t replaced = 0;
+    size_t attempts = candidate_count * 4;
+    while (replaced < replacement_target && attempts > 0) {
+        size_t chosen = candidates[lb_random_index(candidate_count)];
+        if (soil_tops[chosen] < water_level) {
+            soil_tops[chosen] += 1; // one water voxel becomes soil in this column
+            replaced++;
+        }
+        attempts--;
+    }
+
+    if (replaced < replacement_target) {
+        for (size_t i = 0; i < candidate_count && replaced < replacement_target; i++) {
+            size_t column_index = candidates[i];
+            if (soil_tops[column_index] < water_level) {
+                soil_tops[column_index] += 1;
+                replaced++;
+            }
+        }
+    }
+
+    free(candidates);
 }
 
 static uint8_t lb_random_surface_type(void) {
@@ -581,9 +691,13 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
     size_t center_air_columns = center_span_x * center_span_z;
     size_t active_column_count = column_count > center_air_columns ? (column_count - center_air_columns) : 0;
     if (active_column_count == 0) {
-        size_t cell_count = grid_size * grid_size * grid_size;
-        for (size_t i = 0; i < cell_count; i++) {
-            voxel_types_out[i] = 2; // air
+        for (size_t x = 0; x < grid_size; x++) {
+            for (size_t z = 0; z < grid_size; z++) {
+                for (size_t y = 0; y < grid_size; y++) {
+                    size_t index = lb_voxel_index(grid_size, x, y, z);
+                    voxel_types_out[index] = (y == 0) ? 1 : 2; // bottom soil, air above
+                }
+            }
         }
         lb_assign_surfaces_from_transitions(grid_size, voxel_types_out, surfaces_out, faces_per_cell);
         lb_apply_window_layout(
@@ -645,6 +759,17 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
     }
 
     size_t target_soil_cells = lb_random_size_t(balanced_low, balanced_high);
+    /*
+     * Bias each generated map toward slightly heavier ground coverage so the
+     * initial terrain contains up to ten additional soil voxels.
+     */
+    if (target_soil_cells < maximum_soil_cells) {
+        size_t soil_bonus = maximum_soil_cells - target_soil_cells;
+        if (soil_bonus > 10) {
+            soil_bonus = 10;
+        }
+        target_soil_cells += soil_bonus;
+    }
 
     int32_t soil_center = lb_clamp_int32((int32_t)(target_soil_cells / active_column_count) - 1, 0, water_level);
     int32_t diagonal_span_limit = lb_clamp_int32((water_level / 2) + 1, 1, water_level > 0 ? water_level : 1);
@@ -702,6 +827,15 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
         &soil_cells
     );
     lb_add_top_air_soil_spikes(soil_tops, column_count, active_column_count, fill_top, top_air_layers);
+    lb_add_dome_soil_paths(
+        soil_tops,
+        grid_size,
+        water_level,
+        center_start_x,
+        center_end_x,
+        center_start_z,
+        center_end_z
+    );
 
     /* Convert column tops into concrete voxel types for every (x, y, z). */
     for (size_t x = 0; x < grid_size; x++) {
@@ -714,7 +848,9 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
                 size_t index = lb_voxel_index(grid_size, x, y, z);
 
                 uint8_t voxel_type = 2; // air
-                if (is_center_air && y > 0) {
+                if (y == 0) {
+                    voxel_type = 1; // bottom layer is always soil
+                } else if (is_center_air && y > 0) {
                     voxel_type = 2; // central 4/5 x 4/5 core is air above the bottom layer
                 } else if ((int32_t)y <= soil_top) {
                     voxel_type = 1; // soil
