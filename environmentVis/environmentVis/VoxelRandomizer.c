@@ -535,6 +535,15 @@ enum {
     LB_FACE_BOTTOM = 5
 };
 
+enum {
+    LB_SURFACE_OPEN = 0,
+    LB_SURFACE_TRAPDOOR_DOOR = 1,
+    LB_SURFACE_WINDOW_SKYLIGHT = 2,
+    LB_SURFACE_FLOOR_WALL = 3,
+    LB_SURFACE_DOOR_SEGMENT_A = 4,
+    LB_SURFACE_DOOR_SEGMENT_B = 5
+};
+
 static void lb_set_surface_at(
     size_t grid_size,
     uint8_t *surfaces_out,
@@ -557,6 +566,486 @@ static void lb_set_surface_at(
 
     size_t index = lb_voxel_index(grid_size, x, y, z);
     surfaces_out[(index * faces_per_cell) + face] = surface_type;
+}
+
+static uint8_t lb_surface_type_at(
+    size_t grid_size,
+    const uint8_t *surfaces_out,
+    size_t faces_per_cell,
+    size_t x,
+    size_t y,
+    size_t z,
+    size_t face
+) {
+    if (
+        surfaces_out == NULL ||
+        x >= grid_size ||
+        y >= grid_size ||
+        z >= grid_size ||
+        face >= faces_per_cell
+    ) {
+        return LB_SURFACE_OPEN;
+    }
+
+    size_t index = lb_voxel_index(grid_size, x, y, z);
+    return surfaces_out[(index * faces_per_cell) + face];
+}
+
+static int lb_voxel_is_type(
+    size_t grid_size,
+    const uint8_t *voxel_types,
+    size_t x,
+    size_t y,
+    size_t z,
+    uint8_t wanted_type
+) {
+    if (voxel_types == NULL || x >= grid_size || y >= grid_size || z >= grid_size) {
+        return 0;
+    }
+
+    size_t index = lb_voxel_index(grid_size, x, y, z);
+    return voxel_types[index] == wanted_type;
+}
+
+static int lb_door_pair_valid_along_z(
+    size_t grid_size,
+    const uint8_t *voxel_types,
+    const uint8_t *surfaces_out,
+    size_t faces_per_cell,
+    size_t wall_x,
+    size_t core_x,
+    size_t base_y,
+    size_t z,
+    size_t wall_face,
+    size_t core_face
+) {
+    if (base_y + 1 >= grid_size) {
+        return 0;
+    }
+
+    if (lb_surface_type_at(grid_size, surfaces_out, faces_per_cell, wall_x, base_y, z, wall_face) != LB_SURFACE_WINDOW_SKYLIGHT) {
+        return 0; // lower segment must replace a window
+    }
+    if (lb_surface_type_at(grid_size, surfaces_out, faces_per_cell, wall_x, base_y + 1, z, wall_face) != LB_SURFACE_WINDOW_SKYLIGHT) {
+        return 0; // upper segment must be a touching window above
+    }
+    if (lb_surface_type_at(grid_size, surfaces_out, faces_per_cell, core_x, base_y, z, core_face) != LB_SURFACE_WINDOW_SKYLIGHT) {
+        return 0;
+    }
+    if (lb_surface_type_at(grid_size, surfaces_out, faces_per_cell, core_x, base_y + 1, z, core_face) != LB_SURFACE_WINDOW_SKYLIGHT) {
+        return 0;
+    }
+    if (!lb_voxel_is_type(grid_size, voxel_types, wall_x, base_y, z, 1)) {
+        return 0; // door must touch soil at the bottom segment
+    }
+    if (!lb_voxel_is_type(grid_size, voxel_types, wall_x, base_y + 1, z, 2)) {
+        return 0; // door must reach air at the upper segment
+    }
+    if (!lb_voxel_is_type(grid_size, voxel_types, core_x, base_y, z, 2)) {
+        return 0;
+    }
+    if (!lb_voxel_is_type(grid_size, voxel_types, core_x, base_y + 1, z, 2)) {
+        return 0;
+    }
+
+    return 1;
+}
+
+static int lb_door_pair_valid_along_x(
+    size_t grid_size,
+    const uint8_t *voxel_types,
+    const uint8_t *surfaces_out,
+    size_t faces_per_cell,
+    size_t wall_z,
+    size_t core_z,
+    size_t base_y,
+    size_t x,
+    size_t wall_face,
+    size_t core_face
+) {
+    if (base_y + 1 >= grid_size) {
+        return 0;
+    }
+
+    if (lb_surface_type_at(grid_size, surfaces_out, faces_per_cell, x, base_y, wall_z, wall_face) != LB_SURFACE_WINDOW_SKYLIGHT) {
+        return 0;
+    }
+    if (lb_surface_type_at(grid_size, surfaces_out, faces_per_cell, x, base_y + 1, wall_z, wall_face) != LB_SURFACE_WINDOW_SKYLIGHT) {
+        return 0;
+    }
+    if (lb_surface_type_at(grid_size, surfaces_out, faces_per_cell, x, base_y, core_z, core_face) != LB_SURFACE_WINDOW_SKYLIGHT) {
+        return 0;
+    }
+    if (lb_surface_type_at(grid_size, surfaces_out, faces_per_cell, x, base_y + 1, core_z, core_face) != LB_SURFACE_WINDOW_SKYLIGHT) {
+        return 0;
+    }
+    if (!lb_voxel_is_type(grid_size, voxel_types, x, base_y, wall_z, 1)) {
+        return 0;
+    }
+    if (!lb_voxel_is_type(grid_size, voxel_types, x, base_y + 1, wall_z, 2)) {
+        return 0;
+    }
+    if (!lb_voxel_is_type(grid_size, voxel_types, x, base_y, core_z, 2)) {
+        return 0;
+    }
+    if (!lb_voxel_is_type(grid_size, voxel_types, x, base_y + 1, core_z, 2)) {
+        return 0;
+    }
+
+    return 1;
+}
+
+static void lb_apply_door_pair_along_z(
+    size_t grid_size,
+    uint8_t *surfaces_out,
+    size_t faces_per_cell,
+    size_t wall_x,
+    size_t core_x,
+    size_t base_y,
+    size_t z,
+    size_t wall_face,
+    size_t core_face
+) {
+    lb_set_surface_at(
+        grid_size,
+        surfaces_out,
+        faces_per_cell,
+        wall_x,
+        base_y,
+        z,
+        wall_face,
+        LB_SURFACE_DOOR_SEGMENT_A
+    );
+    lb_set_surface_at(
+        grid_size,
+        surfaces_out,
+        faces_per_cell,
+        core_x,
+        base_y,
+        z,
+        core_face,
+        LB_SURFACE_DOOR_SEGMENT_A
+    );
+    lb_set_surface_at(
+        grid_size,
+        surfaces_out,
+        faces_per_cell,
+        wall_x,
+        base_y + 1,
+        z,
+        wall_face,
+        LB_SURFACE_DOOR_SEGMENT_B
+    );
+    lb_set_surface_at(
+        grid_size,
+        surfaces_out,
+        faces_per_cell,
+        core_x,
+        base_y + 1,
+        z,
+        core_face,
+        LB_SURFACE_DOOR_SEGMENT_B
+    );
+}
+
+static void lb_apply_door_pair_along_x(
+    size_t grid_size,
+    uint8_t *surfaces_out,
+    size_t faces_per_cell,
+    size_t wall_z,
+    size_t core_z,
+    size_t base_y,
+    size_t x,
+    size_t wall_face,
+    size_t core_face
+) {
+    lb_set_surface_at(
+        grid_size,
+        surfaces_out,
+        faces_per_cell,
+        x,
+        base_y,
+        wall_z,
+        wall_face,
+        LB_SURFACE_DOOR_SEGMENT_A
+    );
+    lb_set_surface_at(
+        grid_size,
+        surfaces_out,
+        faces_per_cell,
+        x,
+        base_y,
+        core_z,
+        core_face,
+        LB_SURFACE_DOOR_SEGMENT_A
+    );
+    lb_set_surface_at(
+        grid_size,
+        surfaces_out,
+        faces_per_cell,
+        x,
+        base_y + 1,
+        wall_z,
+        wall_face,
+        LB_SURFACE_DOOR_SEGMENT_B
+    );
+    lb_set_surface_at(
+        grid_size,
+        surfaces_out,
+        faces_per_cell,
+        x,
+        base_y + 1,
+        core_z,
+        core_face,
+        LB_SURFACE_DOOR_SEGMENT_B
+    );
+}
+
+static void lb_apply_door_layout(
+    size_t grid_size,
+    uint8_t *voxel_types,
+    uint8_t *surfaces_out,
+    size_t faces_per_cell,
+    size_t center_start_x,
+    size_t center_end_x,
+    size_t center_start_z,
+    size_t center_end_z
+) {
+    if (
+        grid_size == 0 ||
+        voxel_types == NULL ||
+        surfaces_out == NULL ||
+        faces_per_cell < 6 ||
+        center_start_x == 0 ||
+        center_start_z == 0 ||
+        center_end_x >= grid_size ||
+        center_end_z >= grid_size
+    ) {
+        return;
+    }
+
+    /*
+     * One single door per side face:
+     * - vertical pair of touching windows (lower + upper)
+     * - lower door segment must be on a soil voxel
+     * - upper door segment must be on an air voxel
+     * If no such pair exists for a face, no door is placed for that face.
+     */
+    if (center_start_z < center_end_z) {
+        // West face: wall column at center_start_x - 1, core column at center_start_x.
+        {
+            size_t wall_x = center_start_x - 1;
+            size_t core_x = center_start_x;
+            int found = 0;
+            size_t chosen_base_y = 0;
+            size_t chosen_z = 0;
+
+            for (size_t y = 1; y + 1 < grid_size && !found; y++) {
+                size_t candidates = 0;
+                for (size_t z = center_start_z; z < center_end_z; z++) {
+                    if (
+                        !lb_door_pair_valid_along_z(
+                            grid_size,
+                            voxel_types,
+                            surfaces_out,
+                            faces_per_cell,
+                            wall_x,
+                            core_x,
+                            y,
+                            z,
+                            LB_FACE_RIGHT,
+                            LB_FACE_LEFT
+                        )
+                    ) {
+                        continue;
+                    }
+                    candidates++;
+                    if (lb_random_index(candidates) == 0) {
+                        chosen_z = z;
+                    }
+                }
+                if (candidates > 0) {
+                    chosen_base_y = y;
+                    found = 1;
+                }
+            }
+
+            if (found) {
+                lb_apply_door_pair_along_z(
+                    grid_size,
+                    surfaces_out,
+                    faces_per_cell,
+                    wall_x,
+                    core_x,
+                    chosen_base_y,
+                    chosen_z,
+                    LB_FACE_RIGHT,
+                    LB_FACE_LEFT
+                );
+            }
+        }
+
+        // East face: wall column at center_end_x, core column at center_end_x - 1.
+        {
+            size_t wall_x = center_end_x;
+            size_t core_x = center_end_x - 1;
+            int found = 0;
+            size_t chosen_base_y = 0;
+            size_t chosen_z = 0;
+
+            for (size_t y = 1; y + 1 < grid_size && !found; y++) {
+                size_t candidates = 0;
+                for (size_t z = center_start_z; z < center_end_z; z++) {
+                    if (
+                        !lb_door_pair_valid_along_z(
+                            grid_size,
+                            voxel_types,
+                            surfaces_out,
+                            faces_per_cell,
+                            wall_x,
+                            core_x,
+                            y,
+                            z,
+                            LB_FACE_LEFT,
+                            LB_FACE_RIGHT
+                        )
+                    ) {
+                        continue;
+                    }
+                    candidates++;
+                    if (lb_random_index(candidates) == 0) {
+                        chosen_z = z;
+                    }
+                }
+                if (candidates > 0) {
+                    chosen_base_y = y;
+                    found = 1;
+                }
+            }
+
+            if (found) {
+                lb_apply_door_pair_along_z(
+                    grid_size,
+                    surfaces_out,
+                    faces_per_cell,
+                    wall_x,
+                    core_x,
+                    chosen_base_y,
+                    chosen_z,
+                    LB_FACE_LEFT,
+                    LB_FACE_RIGHT
+                );
+            }
+        }
+    }
+
+    if (center_start_x < center_end_x) {
+        // North face (minimum z): wall row at center_start_z - 1, core row at center_start_z.
+        {
+            size_t wall_z = center_start_z - 1;
+            size_t core_z = center_start_z;
+            int found = 0;
+            size_t chosen_base_y = 0;
+            size_t chosen_x = 0;
+
+            for (size_t y = 1; y + 1 < grid_size && !found; y++) {
+                size_t candidates = 0;
+                for (size_t x = center_start_x; x < center_end_x; x++) {
+                    if (
+                        !lb_door_pair_valid_along_x(
+                            grid_size,
+                            voxel_types,
+                            surfaces_out,
+                            faces_per_cell,
+                            wall_z,
+                            core_z,
+                            y,
+                            x,
+                            LB_FACE_FRONT,
+                            LB_FACE_BACK
+                        )
+                    ) {
+                        continue;
+                    }
+                    candidates++;
+                    if (lb_random_index(candidates) == 0) {
+                        chosen_x = x;
+                    }
+                }
+                if (candidates > 0) {
+                    chosen_base_y = y;
+                    found = 1;
+                }
+            }
+
+            if (found) {
+                lb_apply_door_pair_along_x(
+                    grid_size,
+                    surfaces_out,
+                    faces_per_cell,
+                    wall_z,
+                    core_z,
+                    chosen_base_y,
+                    chosen_x,
+                    LB_FACE_FRONT,
+                    LB_FACE_BACK
+                );
+            }
+        }
+
+        // South face (maximum z): wall row at center_end_z, core row at center_end_z - 1.
+        {
+            size_t wall_z = center_end_z;
+            size_t core_z = center_end_z - 1;
+            int found = 0;
+            size_t chosen_base_y = 0;
+            size_t chosen_x = 0;
+
+            for (size_t y = 1; y + 1 < grid_size && !found; y++) {
+                size_t candidates = 0;
+                for (size_t x = center_start_x; x < center_end_x; x++) {
+                    if (
+                        !lb_door_pair_valid_along_x(
+                            grid_size,
+                            voxel_types,
+                            surfaces_out,
+                            faces_per_cell,
+                            wall_z,
+                            core_z,
+                            y,
+                            x,
+                            LB_FACE_BACK,
+                            LB_FACE_FRONT
+                        )
+                    ) {
+                        continue;
+                    }
+                    candidates++;
+                    if (lb_random_index(candidates) == 0) {
+                        chosen_x = x;
+                    }
+                }
+                if (candidates > 0) {
+                    chosen_base_y = y;
+                    found = 1;
+                }
+            }
+
+            if (found) {
+                lb_apply_door_pair_along_x(
+                    grid_size,
+                    surfaces_out,
+                    faces_per_cell,
+                    wall_z,
+                    core_z,
+                    chosen_base_y,
+                    chosen_x,
+                    LB_FACE_BACK,
+                    LB_FACE_FRONT
+                );
+            }
+        }
+    }
 }
 
 static void lb_apply_window_layout(
@@ -873,6 +1362,16 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
         surfaces_out,
         faces_per_cell,
         water_level,
+        center_start_x,
+        center_end_x,
+        center_start_z,
+        center_end_z
+    );
+    lb_apply_door_layout(
+        grid_size,
+        voxel_types_out,
+        surfaces_out,
+        faces_per_cell,
         center_start_x,
         center_end_x,
         center_start_z,

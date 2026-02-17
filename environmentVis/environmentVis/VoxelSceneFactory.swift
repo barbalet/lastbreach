@@ -14,6 +14,8 @@ enum SurfaceType: UInt8 {
     case trapdoorDoor = 1
     case windowSkylight = 2
     case floorWall = 3
+    case wideDoorSegmentA = 4
+    case wideDoorSegmentB = 5
 }
 
 enum CubeFace: Int, CaseIterable {
@@ -48,6 +50,14 @@ enum VoxelSceneFactory {
 
     private static let trapdoorMaterial = makePatternFaceMaterial(
         image: makeDoorOrWindowImage(innerTransparent: false)
+    )
+
+    private static let tallDoorBottomMaterial = makePatternFaceMaterial(
+        image: makeTallDoorHalfImage(showTopHalf: false)
+    )
+
+    private static let tallDoorTopMaterial = makePatternFaceMaterial(
+        image: makeTallDoorHalfImage(showTopHalf: true)
     )
 
     private static let windowMaterial = makePatternFaceMaterial(
@@ -233,6 +243,10 @@ enum VoxelSceneFactory {
             return openMaterial
         case .trapdoorDoor:
             return trapdoorMaterial
+        case .wideDoorSegmentA:
+            return tallDoorBottomMaterial
+        case .wideDoorSegmentB:
+            return tallDoorTopMaterial
         case .windowSkylight:
             return windowMaterial
         case .floorWall:
@@ -355,6 +369,45 @@ enum VoxelSceneFactory {
             )
             cg.setFillColor(frameColor.cgColor)
             cg.fill(link)
+        }
+    }
+
+    private static func makeTallDoorHalfImage(showTopHalf: Bool) -> UIImage {
+        let size = CGSize(width: 256, height: 256)
+        let renderer = UIGraphicsImageRenderer(size: size)
+
+        return renderer.image { context in
+            let cg = context.cgContext
+
+            let panelColor = UIColor(red: 0.39, green: 0.35, blue: 0.30, alpha: 1.0)
+            let frameColor = UIColor(red: 0.76, green: 0.72, blue: 0.67, alpha: 1.0)
+            let innerColor = UIColor(red: 0.22, green: 0.20, blue: 0.18, alpha: 1.0)
+
+            let outerSquare = CGRect(x: 18, y: 18, width: 220, height: 220)
+            cg.setFillColor(panelColor.cgColor)
+            cg.fill(outerSquare)
+
+            cg.setStrokeColor(frameColor.cgColor)
+            cg.setLineWidth(8)
+            cg.stroke(outerSquare)
+
+            let edgeInset: CGFloat = 1.5
+            let bottomGap: CGFloat = 4.0
+            let fullOval = CGRect(
+                x: outerSquare.minX + edgeInset,
+                y: showTopHalf ? (outerSquare.minY + edgeInset) : (outerSquare.minY - outerSquare.height + edgeInset),
+                width: outerSquare.width - (edgeInset * 2.0),
+                height: (outerSquare.height * 2.0) - edgeInset - bottomGap
+            )
+
+            cg.saveGState()
+            cg.clip(to: outerSquare)
+            cg.setFillColor(innerColor.cgColor)
+            cg.fillEllipse(in: fullOval)
+            cg.setStrokeColor(frameColor.cgColor)
+            cg.setLineWidth(6)
+            cg.strokeEllipse(in: fullOval)
+            cg.restoreGState()
         }
     }
 }
