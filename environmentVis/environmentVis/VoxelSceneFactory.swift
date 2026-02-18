@@ -44,6 +44,9 @@ struct VoxelCell {
 }
 
 enum VoxelSceneFactory {
+    private static let fullEnvironmentContainerName = "fullEnvironmentContainer"
+    private static let interfacesOnlyContainerName = "interfacesOnlyContainer"
+
     private static let wallMaterial = makeOpaqueFaceMaterial(
         color: UIColor(red: 0.31, green: 0.30, blue: 0.27, alpha: 1.0)
     )
@@ -83,10 +86,18 @@ enum VoxelSceneFactory {
         return material
     }()
 
-    static func makeScene(size: Int) -> SCNScene {
+    static func makeScene(size: Int, interfacesOnly: Bool = false) -> SCNScene {
         let scene = SCNScene()
 
         let voxelContainer = SCNNode()
+        let fullEnvironmentContainer = SCNNode()
+        fullEnvironmentContainer.name = fullEnvironmentContainerName
+
+        let interfacesOnlyContainer = SCNNode()
+        interfacesOnlyContainer.name = interfacesOnlyContainerName
+
+        voxelContainer.addChildNode(fullEnvironmentContainer)
+        voxelContainer.addChildNode(interfacesOnlyContainer)
         scene.rootNode.addChildNode(voxelContainer)
 
         /* Build randomized voxel payload first, then scene graph around it. */
@@ -94,7 +105,9 @@ enum VoxelSceneFactory {
 
         addCamera(to: scene, size: size)
         addLights(to: scene)
-        addVoxels(to: voxelContainer, grid: grid, size: size)
+        addVoxels(to: fullEnvironmentContainer, grid: grid, size: size, interfacesOnly: false)
+        addVoxels(to: interfacesOnlyContainer, grid: grid, size: size, interfacesOnly: true)
+        setInterfacesOnly(interfacesOnly, in: scene)
 
         let spin = SCNAction.repeatForever(
             SCNAction.rotateBy(x: 0.0, y: .pi * 2.0, z: .pi / 8.0, duration: 26.0)
@@ -102,6 +115,14 @@ enum VoxelSceneFactory {
         voxelContainer.runAction(spin)
 
         return scene
+    }
+
+    static func setInterfacesOnly(_ interfacesOnly: Bool, in scene: SCNScene) {
+        let fullEnvironmentContainer = scene.rootNode.childNode(withName: fullEnvironmentContainerName, recursively: true)
+        let interfacesOnlyContainer = scene.rootNode.childNode(withName: interfacesOnlyContainerName, recursively: true)
+
+        fullEnvironmentContainer?.isHidden = interfacesOnly
+        interfacesOnlyContainer?.isHidden = !interfacesOnly
     }
 
     private static func makeGrid(size: Int) -> [[[VoxelCell]]] {
@@ -202,7 +223,7 @@ enum VoxelSceneFactory {
         scene.rootNode.addChildNode(rimLightNode)
     }
 
-    private static func addVoxels(to root: SCNNode, grid: [[[VoxelCell]]], size: Int) {
+    private static func addVoxels(to root: SCNNode, grid: [[[VoxelCell]]], size: Int, interfacesOnly: Bool) {
         let unit = CGFloat(0.05)
         let spacing = unit
         let shellSize = unit * 1.04
@@ -217,12 +238,15 @@ enum VoxelSceneFactory {
                     /* Shell carries per-face materials (windows/walls/open/etc.). */
                     let shellGeometry = SCNBox(width: shellSize, height: shellSize, length: shellSize, chamferRadius: 0.0)
                     shellGeometry.materials = CubeFace.allCases.map { face in
-                        surfaceMaterial(for: cell.surface(at: face))
+                        let surface = cell.surface(at: face)
+                        return interfacesOnly
+                            ? interfaceSurfaceMaterial(for: surface)
+                            : surfaceMaterial(for: surface)
                     }
                     let shellNode = SCNNode(geometry: shellGeometry)
                     cellNode.addChildNode(shellNode)
 
-                    if cell.type != .air {
+                    if !interfacesOnly && cell.type != .air {
                         /* Core box visualizes the actual voxel material (soil/water). */
                         let coreSize = shellSize * 0.78
                         let coreGeometry = SCNBox(width: coreSize, height: coreSize, length: coreSize, chamferRadius: 0.0)
@@ -256,6 +280,21 @@ enum VoxelSceneFactory {
             return windowMaterial
         case .floorWall:
             return wallMaterial
+        }
+    }
+
+    private static func interfaceSurfaceMaterial(for kind: SurfaceType) -> SCNMaterial {
+        switch kind {
+        case .trapdoorDoor:
+            return trapdoorMaterial
+        case .wideDoorSegmentA:
+            return tallDoorBottomMaterial
+        case .wideDoorSegmentB:
+            return tallDoorTopMaterial
+        case .windowSkylight:
+            return windowMaterial
+        case .open, .floorWall:
+            return openMaterial
         }
     }
 
