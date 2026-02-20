@@ -39,7 +39,8 @@
  * 4) Materialize soil/water/air voxel types for every Y level.
  * 5) Derive face surfaces from voxel-to-voxel transitions.
  * 6) Apply deterministic window/skylight layout around the shaft.
- * 7) Apply top door layout (single valid opening per side if possible).
+ * 7) Apply incidental vertical interface labels from voxel transitions.
+ * 8) Apply top door layout (single valid opening per side if possible).
  *
  * Design goals
  * ------------
@@ -670,6 +671,75 @@ static void lb_set_surface_at(
 
     size_t index = lb_voxel_index(grid_size, x, y, z);
     surfaces_out[(index * faces_per_cell) + face] = surface_type;
+}
+
+/*
+ * Scan only vertical interfaces (front/right/back/left) and add incidental
+ * window/wall labels from voxel-to-voxel transitions.
+ *
+ * This pass only targets incidental air/material transitions:
+ * - soil<->air always overwrites to wall so structural boundaries remain visible
+ * - water<->air writes window only when the current face is still open
+ */
+static void lb_assign_incidental_vertical_surfaces_from_transitions(
+    size_t grid_size,
+    const uint8_t *voxel_types,
+    uint8_t *surfaces_out,
+    size_t faces_per_cell
+) {
+    if (
+        grid_size == 0 ||
+        voxel_types == NULL ||
+        surfaces_out == NULL ||
+        faces_per_cell < 4
+    ) {
+        return;
+    }
+
+    static const int32_t face_dx[4] = {0, 1, 0, -1};
+    static const int32_t face_dz[4] = {1, 0, -1, 0};
+
+    for (size_t x = 0; x < grid_size; x++) {
+        for (size_t y = 0; y < grid_size; y++) {
+            for (size_t z = 0; z < grid_size; z++) {
+                size_t index = lb_voxel_index(grid_size, x, y, z);
+                uint8_t current_type = voxel_types[index];
+                uint8_t *surface_start = surfaces_out + (index * faces_per_cell);
+
+                for (size_t face = 0; face < 4; face++) {
+                    int32_t nx = (int32_t)x + face_dx[face];
+                    int32_t nz = (int32_t)z + face_dz[face];
+
+                    if (
+                        nx < 0 ||
+                        nz < 0 ||
+                        (size_t)nx >= grid_size ||
+                        (size_t)nz >= grid_size
+                    ) {
+                        continue;
+                    }
+
+                    uint8_t adjacent_type = lb_voxel_type_at(
+                        grid_size,
+                        voxel_types,
+                        nx,
+                        (int32_t)y,
+                        nz
+                    );
+                    uint8_t transition_surface = lb_surface_type_from_transition(current_type, adjacent_type);
+
+                    if (transition_surface == LB_SURFACE_FLOOR_WALL) {
+                        surface_start[face] = LB_SURFACE_FLOOR_WALL;
+                    } else if (
+                        transition_surface == LB_SURFACE_WINDOW_SKYLIGHT &&
+                        surface_start[face] == LB_SURFACE_OPEN
+                    ) {
+                        surface_start[face] = transition_surface;
+                    }
+                }
+            }
+        }
+    }
 }
 
 /* Convenience predicate used by door-placement validation routines. */
@@ -1306,6 +1376,12 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
             center_start_z,
             center_end_z
         );
+        lb_assign_incidental_vertical_surfaces_from_transitions(
+            grid_size,
+            voxel_types_out,
+            surfaces_out,
+            faces_per_cell
+        );
         return;
     }
 
@@ -1483,8 +1559,11 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
     }
 
     /*
-     * Stage D: derive surfaces from material transitions first, then apply
-     * deterministic shaft-specific window and door layout overrides.
+     * Stage D:
+     * 1) derive surfaces from material transitions
+     * 2) apply deterministic shaft window layout
+     * 3) fill incidental vertical interfaces (soil<->air overwrites to wall)
+     * 4) apply deterministic shaft door layout
      */
     lb_assign_surfaces_from_transitions(grid_size, voxel_types_out, surfaces_out, faces_per_cell);
     lb_apply_window_layout(
@@ -1496,6 +1575,12 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
         center_end_x,
         center_start_z,
         center_end_z
+    );
+    lb_assign_incidental_vertical_surfaces_from_transitions(
+        grid_size,
+        voxel_types_out,
+        surfaces_out,
+        faces_per_cell
     );
     lb_apply_door_layout(
         grid_size,

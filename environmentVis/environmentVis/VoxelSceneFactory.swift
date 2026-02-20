@@ -78,7 +78,7 @@ enum VoxelSceneFactory {
     private static let waterCoreMaterial: SCNMaterial = {
         let material = makeCoreMaterial(
             color: UIColor(red: 0.18, green: 0.58, blue: 0.98, alpha: 1.0),
-            transparency: 0.16,
+            transparency: 0.06,
             roughness: 0.06
         )
         /* Keep stacked water readable; writing depth here blocks farther translucent voxels. */
@@ -293,7 +293,9 @@ enum VoxelSceneFactory {
             return tallDoorTopMaterial
         case .windowSkylight:
             return windowMaterial
-        case .open, .floorWall:
+        case .floorWall:
+            return wallMaterial
+        case .open:
             return openMaterial
         }
     }
