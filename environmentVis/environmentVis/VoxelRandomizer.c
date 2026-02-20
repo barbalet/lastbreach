@@ -3,12 +3,52 @@
 #include <stdlib.h>
 
 /*
- * Voxel generator goals:
- * - deterministic shape constraints with randomized variation
- * - mostly-air top layers and a center shaft to keep interior readable
- * - surface labels derived from voxel-to-voxel transitions
+ * VoxelRandomizer.c
+ * -----------------
+ * This module generates a complete voxel payload for the SceneKit viewer:
+ * - `voxel_types_out`: material at each (x, y, z) cell
+ * - `surfaces_out`: per-face surface style metadata
+ *
+ * Coordinate system and indexing
+ * ------------------------------
+ * - Grid dimensions are `grid_size x grid_size x grid_size`.
+ * - X and Z are horizontal axes; Y is vertical.
+ * - The storage order is X-major, then Y, then Z:
+ *   index = (x * grid_size * grid_size) + (y * grid_size) + z
+ *
+ * Material encoding (`voxel_types_out`)
+ * -------------------------------------
+ * - 0: water
+ * - 1: soil
+ * - 2: air
+ *
+ * Surface encoding (`surfaces_out`, one value per face)
+ * -----------------------------------------------------
+ * - 0: open
+ * - 1: trapdoor / door
+ * - 2: window / skylight
+ * - 3: floor / wall
+ * - 4: wide door segment A
+ * - 5: wide door segment B
+ *
+ * High-level generation pipeline
+ * ------------------------------
+ * 1) Reserve a central "open shaft" region to keep the interior readable.
+ * 2) Build per-column soil tops with diagonal bias + jitter.
+ * 3) Balance soil/water budgets and optionally add protrusions + spikes.
+ * 4) Materialize soil/water/air voxel types for every Y level.
+ * 5) Derive face surfaces from voxel-to-voxel transitions.
+ * 6) Apply deterministic window/skylight layout around the shaft.
+ * 7) Apply top door layout (single valid opening per side if possible).
+ *
+ * Design goals
+ * ------------
+ * - Deterministic structural rules with randomized variation.
+ * - Terrain that is readable at a glance (especially from the exterior).
+ * - Surface labels inferred from materials, then selectively overridden.
  */
 
+/* Clamp helper used anywhere values must stay in a safe integer range. */
 static int32_t lb_clamp_int32(int32_t value, int32_t min_value, int32_t max_value) {
     if (value < min_value) {
         return min_value;
@@ -19,6 +59,10 @@ static int32_t lb_clamp_int32(int32_t value, int32_t min_value, int32_t max_valu
     return value;
 }
 
+/*
+ * Inclusive random integer in [min_value, max_value].
+ * If range is invalid/degenerate, returns min_value.
+ */
 static int32_t lb_random_int32(int32_t min_value, int32_t max_value) {
     if (max_value <= min_value) {
         return min_value;
@@ -29,6 +73,10 @@ static int32_t lb_random_int32(int32_t min_value, int32_t max_value) {
     return min_value + (int32_t)arc4random_uniform(span);
 }
 
+/*
+ * Inclusive random size_t in [min_value, max_value].
+ * Caps span at UINT32_MAX because arc4random_uniform uses uint32_t.
+ */
 static size_t lb_random_size_t(size_t min_value, size_t max_value) {
     if (max_value <= min_value) {
         return min_value;
@@ -42,6 +90,7 @@ static size_t lb_random_size_t(size_t min_value, size_t max_value) {
     return min_value + (size_t)arc4random_uniform((uint32_t)span);
 }
 
+/* Pick an index in [0, count). Safe for tiny and very large counts. */
 static size_t lb_random_index(size_t count) {
     if (count <= 1) {
         return 0;
@@ -53,6 +102,10 @@ static size_t lb_random_index(size_t count) {
     return (size_t)arc4random_uniform((uint32_t)count);
 }
 
+/*
+ * Convert (x, z) into a diagonal-position scalar.
+ * Different `mode` values rotate the diagonal orientation.
+ */
 static size_t lb_diagonal_position(size_t grid_size, size_t x, size_t z, uint32_t mode) {
     size_t edge = grid_size - 1;
 
@@ -69,6 +122,12 @@ static size_t lb_diagonal_position(size_t grid_size, size_t x, size_t z, uint32_
     }
 }
 
+/*
+ * Compute the top soil Y for one X/Z column by:
+ * - interpolating between low/high bounds along a diagonal axis
+ * - applying optional random jitter
+ * - clamping result to valid Y range
+ */
 static int32_t lb_diagonal_soil_top(
     size_t grid_size,
     size_t x,
@@ -96,10 +155,12 @@ static int32_t lb_diagonal_soil_top(
     return lb_clamp_int32(base_height, 0, (int32_t)grid_size - 1);
 }
 
+/* Linear address helper for flattened 3D arrays. */
 static size_t lb_voxel_index(size_t grid_size, size_t x, size_t y, size_t z) {
     return (x * grid_size * grid_size) + (y * grid_size) + z;
 }
 
+/* True when (x,z) is inside the reserved center shaft footprint. */
 static int lb_is_in_center_air(
     size_t x,
     size_t z,
@@ -111,6 +172,7 @@ static int lb_is_in_center_air(
     return x >= center_start_x && x < center_end_x && z >= center_start_z && z < center_end_z;
 }
 
+/* True when (x,z) sits directly beside the center shaft perimeter. */
 static int lb_is_adjacent_to_center_air(
     size_t x,
     size_t z,
@@ -144,9 +206,15 @@ static void lb_adjust_soil_to_target(
     /*
      * Nudge per-column soil tops toward an exact aggregate target.
      * Random passes keep shapes organic; deterministic fallback guarantees finish.
+     *
+     * Notes:
+     * - `soil_tops[i]` means the highest soil Y in column i.
+     * - A top of -1 means "no soil above y=0 baseline" for that column.
+     * - We mutate both `soil_tops` and running total `*soil_cells_inout`.
      */
     size_t guard = (column_count * (size_t)(max_top + 1) * 6) + 1;
 
+    /* Phase 1: random increments until we reach (or approach) target. */
     while (*soil_cells_inout < target_soil_cells && guard > 0) {
         size_t index = lb_random_index(column_count);
         if (soil_tops[index] >= 0 && soil_tops[index] < max_top) {
@@ -156,6 +224,7 @@ static void lb_adjust_soil_to_target(
         guard--;
     }
 
+    /* Phase 2: deterministic sweep if random phase did not fully converge. */
     if (*soil_cells_inout < target_soil_cells) {
         for (size_t i = 0; i < column_count && *soil_cells_inout < target_soil_cells; i++) {
             while (soil_tops[i] >= 0 && soil_tops[i] < max_top && *soil_cells_inout < target_soil_cells) {
@@ -167,6 +236,7 @@ static void lb_adjust_soil_to_target(
 
     guard = (column_count * (size_t)(max_top + 1) * 6) + 1;
 
+    /* Phase 3: random decrements if we overshot the target. */
     while (*soil_cells_inout > target_soil_cells && guard > 0) {
         size_t index = lb_random_index(column_count);
         if (soil_tops[index] > 0) {
@@ -176,6 +246,7 @@ static void lb_adjust_soil_to_target(
         guard--;
     }
 
+    /* Phase 4: deterministic decrement sweep as final correction. */
     if (*soil_cells_inout > target_soil_cells) {
         for (size_t i = 0; i < column_count && *soil_cells_inout > target_soil_cells; i++) {
             while (soil_tops[i] > 0 && *soil_cells_inout > target_soil_cells) {
@@ -197,11 +268,17 @@ static void lb_raise_soil_protrusions(
     /*
      * Convert some water volume into taller soil outcrops while preserving a
      * minimum water budget for visual/structural balance.
+     *
+     * Conceptually:
+     * - We measure current water capacity under `water_level`.
+     * - We spend "water surplus" to raise selected columns upward.
+     * - Raising above water level is allowed; only submerged increments cost water.
      */
     if (column_count == 0 || water_level >= max_height) {
         return;
     }
 
+    /* Count how many cells currently qualify as water volume. */
     size_t water_cells = 0;
     for (size_t i = 0; i < column_count; i++) {
         if (soil_tops[i] >= 0 && soil_tops[i] < water_level) {
@@ -216,6 +293,10 @@ static void lb_raise_soil_protrusions(
     size_t water_surplus = water_cells - minimum_water_cells;
     size_t attempts = column_count * 4;
 
+    /*
+     * Randomly try to raise columns while respecting water budget.
+     * `water_cost` only includes the portion raised within submerged range.
+     */
     while (attempts > 0 && water_surplus > 0) {
         size_t index = lb_random_index(column_count);
         int32_t top = soil_tops[index];
@@ -256,6 +337,11 @@ static void lb_add_top_air_soil_spikes(
     /*
      * Optional sparse spikes that pierce the top air layer; this breaks up
      * perfectly flat silhouettes while keeping most of the cap open.
+     *
+     * This stage is intentionally conservative:
+     * - probability-gated
+     * - limited total spike cells
+     * - limited number of participating columns
      */
     if (column_count == 0 || active_column_count == 0 || top_air_layers <= 0) {
         return;
@@ -290,6 +376,7 @@ static void lb_add_top_air_soil_spikes(
     size_t remaining_columns = spike_column_target;
     size_t attempts = column_count * 8;
 
+    /* First pass: select distinct columns and assign initial spike heights. */
     while (remaining_columns > 0 && remaining_cells > 0 && attempts > 0) {
         size_t column_index = lb_random_index(column_count);
         if (soil_tops[column_index] < 0 || spike_markers[column_index] != 0) {
@@ -315,6 +402,7 @@ static void lb_add_top_air_soil_spikes(
         attempts--;
     }
 
+    /* Second pass: distribute leftover spike cells onto already selected columns. */
     attempts = column_count * 8;
     while (remaining_cells > 0 && attempts > 0) {
         size_t column_index = lb_random_index(column_count);
@@ -349,6 +437,10 @@ static void lb_add_dome_soil_paths(
     /*
      * Replace one or two water voxels with soil beside the center shaft so at
      * least a small soil path can originate from the dome perimeter.
+     *
+     * This is a subtle playability/readability tweak:
+     * - identify shaft-adjacent columns that still have water above soil
+     * - push soil top upward by exactly one level in up to two columns
      */
     if (
         soil_tops == NULL ||
@@ -402,6 +494,7 @@ static void lb_add_dome_soil_paths(
 
     size_t replaced = 0;
     size_t attempts = candidate_count * 4;
+    /* Random placement first for variation. */
     while (replaced < replacement_target && attempts > 0) {
         size_t chosen = candidates[lb_random_index(candidate_count)];
         if (soil_tops[chosen] < water_level) {
@@ -411,6 +504,7 @@ static void lb_add_dome_soil_paths(
         attempts--;
     }
 
+    /* Deterministic fallback ensures target count is reached when possible. */
     if (replaced < replacement_target) {
         for (size_t i = 0; i < candidate_count && replaced < replacement_target; i++) {
             size_t column_index = candidates[i];
@@ -425,6 +519,7 @@ static void lb_add_dome_soil_paths(
 }
 
 static uint8_t lb_random_surface_type(void) {
+    /* Weighted random helper for optional extra face channels. */
     uint32_t draw = arc4random_uniform(100);
 
     if (draw < 25) {
@@ -446,6 +541,7 @@ static uint8_t lb_voxel_type_at(
     int32_t y,
     int32_t z
 ) {
+    /* Out-of-bounds is modeled as air to simplify transition checks. */
     if (x < 0 || y < 0 || z < 0) {
         return 2; // outside bounds is treated as air
     }
@@ -458,6 +554,7 @@ static uint8_t lb_voxel_type_at(
     return voxel_types[index];
 }
 
+/* Map neighboring material transition to a render surface classification. */
 static uint8_t lb_surface_type_from_transition(uint8_t current_type, uint8_t adjacent_type) {
     /*
      * Surface meaning is inferred from material boundary:
@@ -486,7 +583,10 @@ static void lb_assign_surfaces_from_transitions(
         return;
     }
 
-    // Matches CubeFace ordering in Swift: front, right, back, left, top, bottom.
+    /*
+     * Face offsets must match `CubeFace` ordering in Swift:
+     * front, right, back, left, top, bottom.
+     */
     static const int32_t face_dx[6] = {0, 1, 0, -1, 0, 0};
     static const int32_t face_dy[6] = {0, 0, 0, 0, 1, -1};
     static const int32_t face_dz[6] = {1, 0, -1, 0, 0, 0};
@@ -500,6 +600,7 @@ static void lb_assign_surfaces_from_transitions(
 
                 for (size_t face = 0; face < faces_per_cell; face++) {
                     if (face < 6) {
+                        /* Compare current voxel type against its face-neighbor type. */
                         int32_t nx = (int32_t)x + face_dx[face];
                         int32_t ny = (int32_t)y + face_dy[face];
                         int32_t nz = (int32_t)z + face_dz[face];
@@ -527,6 +628,7 @@ static void lb_assign_surfaces_from_transitions(
 }
 
 enum {
+    /* Must match CubeFace raw values in VoxelSceneFactory.swift. */
     LB_FACE_FRONT = 0,
     LB_FACE_RIGHT = 1,
     LB_FACE_BACK = 2,
@@ -536,6 +638,7 @@ enum {
 };
 
 enum {
+    /* Must match SurfaceType raw values in VoxelSceneFactory.swift. */
     LB_SURFACE_OPEN = 0,
     LB_SURFACE_TRAPDOOR_DOOR = 1,
     LB_SURFACE_WINDOW_SKYLIGHT = 2,
@@ -544,6 +647,7 @@ enum {
     LB_SURFACE_DOOR_SEGMENT_B = 5
 };
 
+/* Bounds-checked write helper for one surface label at one voxel face. */
 static void lb_set_surface_at(
     size_t grid_size,
     uint8_t *surfaces_out,
@@ -568,6 +672,7 @@ static void lb_set_surface_at(
     surfaces_out[(index * faces_per_cell) + face] = surface_type;
 }
 
+/* Convenience predicate used by door-placement validation routines. */
 static int lb_voxel_is_type(
     size_t grid_size,
     const uint8_t *voxel_types,
@@ -584,6 +689,10 @@ static int lb_voxel_is_type(
     return voxel_types[index] == wanted_type;
 }
 
+/*
+ * Check whether a 2-voxel-tall door pair is valid when crossing X boundary
+ * (door faces left/right; candidate iterates along Z).
+ */
 static int lb_door_pair_valid_along_z(
     size_t grid_size,
     const uint8_t *voxel_types,
@@ -596,6 +705,11 @@ static int lb_door_pair_valid_along_z(
         return 0;
     }
 
+    /*
+     * Requirements:
+     * - both rendered segments are air at wall and core columns
+     * - two supporting soil voxels exist directly below on wall side
+     */
     if (!lb_voxel_is_type(grid_size, voxel_types, wall_x, base_y, z, 2)) {
         return 0; // lower rendered segment must be in air
     }
@@ -618,6 +732,10 @@ static int lb_door_pair_valid_along_z(
     return 1;
 }
 
+/*
+ * Check whether a 2-voxel-tall door pair is valid when crossing Z boundary
+ * (door faces front/back; candidate iterates along X).
+ */
 static int lb_door_pair_valid_along_x(
     size_t grid_size,
     const uint8_t *voxel_types,
@@ -630,6 +748,7 @@ static int lb_door_pair_valid_along_x(
         return 0;
     }
 
+    /* Same constraints as Z variant, but oriented on Z wall/core rows. */
     if (!lb_voxel_is_type(grid_size, voxel_types, x, base_y, wall_z, 2)) {
         return 0;
     }
@@ -652,6 +771,7 @@ static int lb_door_pair_valid_along_x(
     return 1;
 }
 
+/* Apply the chosen two-segment door surface IDs along the X boundary pair. */
 static void lb_apply_door_pair_along_z(
     size_t grid_size,
     uint8_t *surfaces_out,
@@ -705,6 +825,7 @@ static void lb_apply_door_pair_along_z(
     );
 }
 
+/* Apply the chosen two-segment door surface IDs along the Z boundary pair. */
 static void lb_apply_door_pair_along_x(
     size_t grid_size,
     uint8_t *surfaces_out,
@@ -758,6 +879,15 @@ static void lb_apply_door_pair_along_x(
     );
 }
 
+/*
+ * Place at most one tall door on each of the four shaft-facing dome sides.
+ *
+ * For each side:
+ * - scan Y from high to low so upper openings are preferred
+ * - collect all valid candidates on that Y
+ * - pick one candidate uniformly (reservoir sampling)
+ * - apply door segments on both touching columns/rows
+ */
 static void lb_apply_door_layout(
     size_t grid_size,
     uint8_t *voxel_types,
@@ -813,6 +943,7 @@ static void lb_apply_door_layout(
                         continue;
                     }
                     candidates++;
+                    /* Reservoir sampling: keeps uniform random choice over candidates. */
                     if (lb_random_index(candidates) == 0) {
                         chosen_z = z;
                     }
@@ -862,6 +993,7 @@ static void lb_apply_door_layout(
                         continue;
                     }
                     candidates++;
+                    /* Reservoir sampling: keeps uniform random choice over candidates. */
                     if (lb_random_index(candidates) == 0) {
                         chosen_z = z;
                     }
@@ -913,6 +1045,7 @@ static void lb_apply_door_layout(
                         continue;
                     }
                     candidates++;
+                    /* Reservoir sampling: keeps uniform random choice over candidates. */
                     if (lb_random_index(candidates) == 0) {
                         chosen_x = x;
                     }
@@ -962,6 +1095,7 @@ static void lb_apply_door_layout(
                         continue;
                     }
                     candidates++;
+                    /* Reservoir sampling: keeps uniform random choice over candidates. */
                     if (lb_random_index(candidates) == 0) {
                         chosen_x = x;
                     }
@@ -1008,6 +1142,10 @@ static void lb_apply_window_layout(
      * the only source of window/skylight surfaces. This intentionally avoids
      * reclassifying air<->water boundaries as floor/wall.
      */
+    /*
+     * Start by clearing any transition-derived windows so this deterministic
+     * layout is the only source of window/skylight labels.
+     */
     size_t cell_count = grid_size * grid_size * grid_size;
     for (size_t i = 0; i < cell_count; i++) {
         uint8_t *surface_start = surfaces_out + (i * faces_per_cell);
@@ -1029,6 +1167,7 @@ static void lb_apply_window_layout(
     }
 
     int32_t max_y = (int32_t)grid_size - 1;
+    /* Window band sits immediately above waterline (clamped into valid Y). */
     int32_t window_start_y = lb_clamp_int32(water_level + 1, 1, max_y);
     int32_t window_end_y = lb_clamp_int32(water_level + 2, window_start_y, max_y);
 
@@ -1036,6 +1175,7 @@ static void lb_apply_window_layout(
     for (int32_t y = window_start_y; y <= window_end_y; y++) {
         size_t uy = (size_t)y;
 
+        /* West/east ring around shaft. */
         for (size_t z = center_start_z; z < center_end_z; z++) {
             size_t min_x = center_start_x;
             size_t max_x = center_end_x - 1;
@@ -1047,6 +1187,7 @@ static void lb_apply_window_layout(
             lb_set_surface_at(grid_size, surfaces_out, faces_per_cell, max_x + 1, uy, z, LB_FACE_LEFT, 2);
         }
 
+        /* North/south ring around shaft. */
         for (size_t x = center_start_x; x < center_end_x; x++) {
             size_t min_z = center_start_z;
             size_t max_z = center_end_z - 1;
@@ -1063,6 +1204,11 @@ static void lb_apply_window_layout(
     size_t ceiling_y = (size_t)window_end_y;
     for (size_t x = center_start_x; x < center_end_x; x++) {
         for (size_t z = center_start_z; z < center_end_z; z++) {
+            /*
+             * Label both touching faces at the interface:
+             * - top face of the lower voxel
+             * - bottom face of the voxel above (when in-bounds)
+             */
             lb_set_surface_at(grid_size, surfaces_out, faces_per_cell, x, ceiling_y, z, LB_FACE_TOP, 2);
             if (ceiling_y + 1 < grid_size) {
                 lb_set_surface_at(
@@ -1081,6 +1227,17 @@ static void lb_apply_window_layout(
 
 }
 
+/*
+ * Public entry point: produce randomized voxel materials + face surfaces.
+ *
+ * Inputs:
+ * - `grid_size`: side length of cubic voxel grid
+ * - output buffers must already be allocated by caller
+ *
+ * Behavior:
+ * - no output is written if arguments are invalid
+ * - generation is stochastic but follows structural constraints
+ */
 void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *surfaces_out, size_t faces_per_cell) {
     if (grid_size == 0 || voxel_types_out == NULL || surfaces_out == NULL || faces_per_cell == 0) {
         return;
@@ -1102,6 +1259,10 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
         top_air_layers = max_height;
     }
 
+    /*
+     * `fill_top` is the highest Y where soil/water can be generated before
+     * optional spikes. Above that, the generator prefers air.
+     */
     int32_t fill_top = max_height - top_air_layers;
     /* Carve a central open shaft that drives window/skylight composition. */
     size_t center_span_x = grid_size >= 5 ? lb_random_size_t(4, 5) : (grid_size >= 4 ? 4 : grid_size);
@@ -1119,8 +1280,13 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
     size_t center_end_z = center_start_z + center_span_z;
 
     size_t center_air_columns = center_span_x * center_span_z;
+    /* Active columns exclude the center shaft footprint. */
     size_t active_column_count = column_count > center_air_columns ? (column_count - center_air_columns) : 0;
     if (active_column_count == 0) {
+        /*
+         * Degenerate fallback: if shaft consumes all columns, emit a minimal
+         * stable world (soil floor + air above) and derive surfaces from it.
+         */
         for (size_t x = 0; x < grid_size; x++) {
             for (size_t z = 0; z < grid_size; z++) {
                 for (size_t y = 0; y < grid_size; y++) {
@@ -1143,6 +1309,7 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
         return;
     }
 
+    /* Candidate volume where soil+water can exist (excluding top-air cap). */
     size_t fillable_cells = active_column_count * (size_t)(fill_top + 1);
 
     /* Enforce a non-trivial amount of both water and soil below the air cap. */
@@ -1154,6 +1321,7 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
         minimum_material_cells = max_balanced_minimum;
     }
 
+    /* Required combined cells enforce simultaneous soil and water presence. */
     size_t minimum_combined_cells = minimum_material_cells * 2;
     size_t minimum_levels = (minimum_combined_cells + active_column_count - 1) / active_column_count;
     int32_t minimum_water_level = lb_clamp_int32((int32_t)minimum_levels - 1, 0, fill_top);
@@ -1164,6 +1332,7 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
     int32_t water_level = water_level_a > water_level_b ? water_level_a : water_level_b;
 
     size_t combined_cells_at_water_level = active_column_count * (size_t)(water_level + 1);
+    /* Maximum soil count after reserving guaranteed minimum water material. */
     size_t maximum_soil_cells = 0;
     if (combined_cells_at_water_level > minimum_material_cells) {
         maximum_soil_cells = combined_cells_at_water_level - minimum_material_cells;
@@ -1172,6 +1341,10 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
         maximum_soil_cells = minimum_material_cells;
     }
 
+    /*
+     * Start with full legal soil range, then optionally narrow toward middle
+     * to avoid pathological extremes in most generated maps.
+     */
     size_t balanced_low = minimum_material_cells;
     size_t balanced_high = maximum_soil_cells;
     if (balanced_high > balanced_low) {
@@ -1201,6 +1374,7 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
         target_soil_cells += soil_bonus;
     }
 
+    /* Convert global target into local per-column diagonal distribution params. */
     int32_t soil_center = lb_clamp_int32((int32_t)(target_soil_cells / active_column_count) - 1, 0, water_level);
     int32_t diagonal_span_limit = lb_clamp_int32((water_level / 2) + 1, 1, water_level > 0 ? water_level : 1);
     int32_t diagonal_span = lb_random_int32(1, diagonal_span_limit);
@@ -1225,6 +1399,10 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
         return;
     }
 
+    /*
+     * Stage A: initialize per-column soil tops with diagonal bias,
+     * while forcing the center shaft columns to air sentinel (-1).
+     */
     size_t soil_cells = 0;
     for (size_t x = 0; x < grid_size; x++) {
         for (size_t z = 0; z < grid_size; z++) {
@@ -1247,6 +1425,10 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
         }
     }
 
+    /*
+     * Stage B: apply balancing passes and stylistic tweaks on `soil_tops`
+     * before materializing final per-voxel types.
+     */
     lb_adjust_soil_to_target(soil_tops, column_count, water_level, target_soil_cells, &soil_cells);
     lb_raise_soil_protrusions(
         soil_tops,
@@ -1267,7 +1449,14 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
         center_end_z
     );
 
-    /* Convert column tops into concrete voxel types for every (x, y, z). */
+    /*
+     * Stage C: convert per-column tops into concrete voxel types:
+     * - y == 0 is always soil baseline
+     * - center shaft above baseline is forced air
+     * - below/at soil_top -> soil
+     * - between soil_top and water_level -> water
+     * - above water_level -> air
+     */
     for (size_t x = 0; x < grid_size; x++) {
         for (size_t z = 0; z < grid_size; z++) {
             size_t column_index = (x * grid_size) + z;
@@ -1294,8 +1483,8 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
     }
 
     /*
-     * Surface labels are a second pass so they can inspect neighboring voxel
-     * types and then apply deterministic window overrides.
+     * Stage D: derive surfaces from material transitions first, then apply
+     * deterministic shaft-specific window and door layout overrides.
      */
     lb_assign_surfaces_from_transitions(grid_size, voxel_types_out, surfaces_out, faces_per_cell);
     lb_apply_window_layout(
