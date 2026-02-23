@@ -14,7 +14,7 @@ struct ContentView: View {
             )
             .ignoresSafeArea()
 
-            Button(removeEnvironment ? "Show environiment" : "Remove environment") {
+            Button(removeEnvironment ? "Show environment" : "Remove environment") {
                 removeEnvironment.toggle()
                 VoxelSceneFactory.setInterfacesOnly(removeEnvironment, in: scene)
             }
