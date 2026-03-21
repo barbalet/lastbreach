@@ -109,7 +109,7 @@ enum VoxelSceneFactory {
         addVoxels(to: fullEnvironmentContainer, grid: grid, size: size, interfacesOnly: false)
         addVoxels(to: interfacesOnlyContainer, grid: grid, size: size, interfacesOnly: true)
         VoxelCharacterFactory.addCharacters(to: voxelContainer, size: size, voxelUnit: voxelUnit)
-        setInterfacesOnly(interfacesOnly, in: scene)
+        setRenderMode(interfacesOnly, showGrid: true, in: scene)
 
         let spin = SCNAction.repeatForever(
             SCNAction.rotateBy(x: 0.0, y: .pi * 2.0, z: .pi / 8.0, duration: 26.0)
@@ -119,6 +119,21 @@ enum VoxelSceneFactory {
         return scene
     }
 
+    static func setRenderMode(_ interfacesOnly: Bool, showGrid: Bool, in scene: SCNScene) {
+        let fullEnvironmentContainer = scene.rootNode.childNode(withName: fullEnvironmentContainerName, recursively: true)
+        let interfacesOnlyContainer = scene.rootNode.childNode(withName: interfacesOnlyContainerName, recursively: true)
+
+        if !showGrid {
+            fullEnvironmentContainer?.isHidden = true
+            interfacesOnlyContainer?.isHidden = true
+            return
+        }
+
+        fullEnvironmentContainer?.isHidden = interfacesOnly
+        interfacesOnlyContainer?.isHidden = !interfacesOnly
+    }
+
+    @available(*, deprecated, message: "Use setRenderMode(_:showGrid:in:) instead.")
     static func setInterfacesOnly(_ interfacesOnly: Bool, in scene: SCNScene) {
         let fullEnvironmentContainer = scene.rootNode.childNode(withName: fullEnvironmentContainerName, recursively: true)
         let interfacesOnlyContainer = scene.rootNode.childNode(withName: interfacesOnlyContainerName, recursively: true)
