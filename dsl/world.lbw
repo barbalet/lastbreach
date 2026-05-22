@@ -9,18 +9,19 @@ world "Default Shelter - Coastal Edge" {
     temp_c: 6.0;
     signature: 10.0;
     power: 35.0;
-    water_safe: 6.0;
-    water_raw: 10.0;
-    structure: 78.0;
+    water_safe: 3.0;
+    water_raw: 5.0;
+    structure: 68.0;
     contamination: 12.0;
   }
 
   inventory {
-    "Food": qty 10;
-    "Water filter": qty 1, cond 80;
-    "Gun cleaning kit": qty 1, cond 75;
-    "Rifle": qty 1, cond 70;
-    "Ammunition": qty 8;
+    "Food": qty 4;
+    "Water filter": qty 1, cond 48;
+    "Gun cleaning kit": qty 1, cond 52;
+    "Gunsmith toolkit": qty 1, cond 58;
+    "Rifle": qty 1, cond 48;
+    "Ammunition": qty 4;
 
     "Battery": qty 1, cond 85;
     "Solar panel": qty 1, cond 80;
@@ -32,8 +33,8 @@ world "Default Shelter - Coastal Edge" {
     "Hydroponic planter": qty 1, cond 70;
     "Seeds": qty 4;
     "Soil": qty 4;
-    "Fertilizer": qty 2;
-    "Plant": qty 1, cond 80;
+    "Fertilizer": qty 1;
+    "Plant": qty 0.8, cond 72;
     "Watering can": qty 1, cond 75;
     "Tomato": qty 1;
     "Carrot": qty 0;
@@ -43,7 +44,7 @@ world "Default Shelter - Coastal Edge" {
     "Food storage containers": qty 3;
 
     "Fishing rod": qty 1, cond 65;
-    "Fishing hooks": qty 6;
+    "Fishing hooks": qty 3;
     "Bucket": qty 1, cond 75;
 
     "Soldering iron": qty 1, cond 60;
@@ -56,7 +57,7 @@ world "Default Shelter - Coastal Edge" {
   }
 
   events {
-    daily "breach" chance 18%;
-    overnight_threat_check chance 25%;
+    daily "breach" chance 100%;
+    overnight_threat_check chance 35%;
   }
 }

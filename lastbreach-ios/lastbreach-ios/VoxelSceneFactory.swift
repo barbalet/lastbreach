@@ -284,6 +284,15 @@ enum VoxelSceneFactory {
         let label = makeLabel(entity.name, color: .white, scale: 0.0035)
         label.position = SCNVector3(0, 0.040, 0)
         root.addChildNode(label)
+
+        if entity.visual.contains("damaged") {
+            addDamageMarks(to: root, critical: entity.visual.contains("critical"))
+        }
+        if entity.visual.contains("dry") {
+            addStatusBeacon(to: root, color: UIColor(red: 0.86, green: 0.68, blue: 0.22, alpha: 1.0))
+        } else if entity.visual.contains("worn") {
+            addStatusBeacon(to: root, color: UIColor(red: 0.84, green: 0.44, blue: 0.21, alpha: 1.0))
+        }
         return root
     }
 
@@ -298,15 +307,84 @@ enum VoxelSceneFactory {
         let node = SCNNode(geometry: itemGeometry(for: entity.visual))
         node.geometry?.materials = [makeEntityMaterial(color: entity.swatch, roughness: 0.62)]
 
+        if entity.visual.contains("empty") {
+            node.opacity = 0.42
+            node.scale = SCNVector3(0.68, 0.68, 0.68)
+        } else if entity.visual.contains("low") {
+            node.scale = SCNVector3(0.82, 0.82, 0.82)
+        }
+
         if entity.visual.contains("plant") || entity.visual.contains("fruit") || entity.visual.contains("root") || entity.visual.contains("sprig") {
             let stem = SCNCylinder(radius: 0.0014, height: 0.014)
-            stem.materials = [makeEntityMaterial(color: UIColor(red: 0.24, green: 0.52, blue: 0.25, alpha: 1.0), roughness: 0.80)]
+            let stemColor = entity.visual.contains("wilted")
+                ? UIColor(red: 0.43, green: 0.32, blue: 0.18, alpha: 1.0)
+                : UIColor(red: 0.24, green: 0.52, blue: 0.25, alpha: 1.0)
+            stem.materials = [makeEntityMaterial(color: stemColor, roughness: 0.80)]
             let stemNode = SCNNode(geometry: stem)
             stemNode.position = SCNVector3(0, 0.010, 0)
+            if entity.visual.contains("wilted") {
+                stemNode.eulerAngles = SCNVector3(0.55, 0, 0.42)
+                addWiltedLeaf(to: node)
+            }
             node.addChildNode(stemNode)
         }
 
+        if entity.visual.contains("worn") {
+            addWearBand(to: node)
+        }
+
         return node
+    }
+
+    private static func addDamageMarks(to root: SCNNode, critical: Bool) {
+        let color = critical
+            ? UIColor(red: 0.12, green: 0.07, blue: 0.05, alpha: 1.0)
+            : UIColor(red: 0.30, green: 0.16, blue: 0.10, alpha: 1.0)
+        let marks: [(SCNVector3, Float)] = [
+            (SCNVector3(0.010, 0.014, 0.020), 0.52),
+            (SCNVector3(-0.010, 0.020, 0.018), -0.44),
+            (SCNVector3(0.004, 0.027, -0.019), 0.80)
+        ]
+
+        for (position, angle) in marks {
+            let crack = SCNBox(width: 0.0022, height: critical ? 0.024 : 0.016, length: 0.002, chamferRadius: 0.0)
+            crack.materials = [makeEntityMaterial(color: color, roughness: 0.92)]
+            let node = SCNNode(geometry: crack)
+            node.position = position
+            node.eulerAngles = SCNVector3(0, 0, angle)
+            root.addChildNode(node)
+        }
+    }
+
+    private static func addStatusBeacon(to root: SCNNode, color: UIColor) {
+        let beacon = SCNSphere(radius: 0.0042)
+        beacon.materials = [makeEntityMaterial(color: color, emission: color.withAlphaComponent(0.45))]
+        let node = SCNNode(geometry: beacon)
+        node.position = SCNVector3(0.020, 0.031, 0.018)
+        let pulse = SCNAction.sequence([
+            SCNAction.scale(to: 1.28, duration: 0.72),
+            SCNAction.scale(to: 0.92, duration: 0.72)
+        ])
+        node.runAction(SCNAction.repeatForever(pulse))
+        root.addChildNode(node)
+    }
+
+    private static func addWearBand(to node: SCNNode) {
+        let band = SCNBox(width: 0.012, height: 0.0022, length: 0.008, chamferRadius: 0.0)
+        band.materials = [makeEntityMaterial(color: UIColor(red: 0.83, green: 0.38, blue: 0.16, alpha: 1.0), roughness: 0.90)]
+        let bandNode = SCNNode(geometry: band)
+        bandNode.position = SCNVector3(0.002, 0.005, 0)
+        bandNode.eulerAngles = SCNVector3(0, 0, 0.28)
+        node.addChildNode(bandNode)
+    }
+
+    private static func addWiltedLeaf(to node: SCNNode) {
+        let leaf = SCNCapsule(capRadius: 0.0024, height: 0.014)
+        leaf.materials = [makeEntityMaterial(color: UIColor(red: 0.50, green: 0.40, blue: 0.19, alpha: 1.0), roughness: 0.86)]
+        let leafNode = SCNNode(geometry: leaf)
+        leafNode.position = SCNVector3(0.006, 0.014, 0.001)
+        leafNode.eulerAngles = SCNVector3(0.78, 0.12, -0.72)
+        node.addChildNode(leafNode)
     }
 
     private static func makeTaskMarkerNode(for entity: VisualSceneEntity) -> SCNNode {

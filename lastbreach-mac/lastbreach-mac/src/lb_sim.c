@@ -353,6 +353,28 @@ static void json_emit_task_event(SimLog *log, const char *type, int day, int tic
     fprintf(out, ",\"ticks\":%d,\"priority\":%.3f}\n", ticks, priority);
 }
 
+static void json_emit_task_note(SimLog *log, const char *type, int day, int tick, Character *ch, const char *task, const char *reason_id, const char *reason, const char *severity) {
+    FILE *out = sim_stream(log);
+    if (!log || !log->json) return;
+    fputs("{\"type\":", out);
+    json_write_string(out, type);
+    fprintf(out, ",\"day\":%d,\"tick\":%d,\"character_id\":", day, tick);
+    json_write_id(out, ch->name);
+    fputs(",\"character\":", out);
+    json_write_string(out, ch->name);
+    fputs(",\"task_id\":", out);
+    json_write_id(out, task);
+    fputs(",\"task\":", out);
+    json_write_string(out, task);
+    fputs(",\"reason_id\":", out);
+    json_write_id(out, reason_id);
+    fputs(",\"reason\":", out);
+    json_write_string(out, reason);
+    fputs(",\"severity\":", out);
+    json_write_string(out, severity);
+    fputs("}\n", out);
+}
+
 static void json_emit_inventory_change(SimLog *log, int day, int tick, const char *cause, Character *ch, const char *task, const char *item, double before_qty, double after_qty, double before_cond, double after_cond) {
     FILE *out = sim_stream(log);
     if (!log || !log->json) return;
@@ -1006,7 +1028,7 @@ static void fatigue_tick(Character *ch) {
     clamp01_100(&ch->fatigue);
 }
 
-static void apply_task_effects(World *w, Character *ch, const char *task, SimLog *log) {
+static void apply_task_effects(World *w, Character *ch, const char *task, SimLog *log, int day, int tick) {
     /* fatigue is handled per-tick in fatigue_tick() */
     const TaskDelta *d = find_task_delta(task);
     apply_task_delta(w, ch, d);
@@ -1022,6 +1044,7 @@ static void apply_task_effects(World *w, Character *ch, const char *task, SimLog
             ch->hunger += h;
             ch->hydration += hy;
         } else {
+            json_emit_task_note(log, "task_failed", day, tick, ch, task, "no_food", "No edible food was available.", "high");
             ch->morale -= 2.0;
             ch->illness += 1.0;
         }
@@ -1037,6 +1060,8 @@ static void apply_task_effects(World *w, Character *ch, const char *task, SimLog
         if (meal_parts > 0.0) {
             inv_add(&w->inv, "Food", meal_parts, 100.0);
             w->cooked_food_portions += meal_parts;
+        } else {
+            json_emit_task_note(log, "task_failed", day, tick, ch, task, "missing_ingredients", "No fish or produce was available to prepare.", "medium");
         }
     } else if (strcmp(task, "Food preservation")==0) {
         double preserved = inv_consume(&w->inv, "Food", 1.5);
@@ -1054,6 +1079,8 @@ static void apply_task_effects(World *w, Character *ch, const char *task, SimLog
                 "Canned spam"
             };
             inv_add(&w->inv, canned[rand()%5], 1.0, 95.0);
+        } else {
+            json_emit_task_note(log, "task_failed", day, tick, ch, task, "no_food_to_preserve", "No prepared food was available to preserve.", "medium");
         }
     } else if (strcmp(task, "Gardening")==0) {
         int has_planter = inv_stock(&w->inv, "Hydroponic planter") > 0.0;
@@ -1062,6 +1089,14 @@ static void apply_task_effects(World *w, Character *ch, const char *task, SimLog
             inv_add(&w->inv, "Plant", 1.0, 100.0);
             w->hydroponic_health += 6.0;
             sim_textf(log, "    gardening: planted seeds (Plant +1.0)\n");
+        } else if (!has_planter) {
+            json_emit_task_note(log, "task_failed", day, tick, ch, task, "missing_planter", "No hydroponic planter was available.", "high");
+        } else if (water_used <= 0.0) {
+            json_emit_task_note(log, "task_failed", day, tick, ch, task, "no_water", "No water was available for planting.", "high");
+        } else if (inv_stock(&w->inv, "Seeds") <= 0.0) {
+            json_emit_task_note(log, "task_failed", day, tick, ch, task, "no_seeds", "No seeds were available for planting.", "medium");
+        } else {
+            json_emit_task_note(log, "task_failed", day, tick, ch, task, "no_soil", "No soil was available for planting.", "medium");
         }
     } else if (strcmp(task, "Watering plants")==0) {
         double used = consume_world_water(w, 1.0);
@@ -1070,12 +1105,16 @@ static void apply_task_effects(World *w, Character *ch, const char *task, SimLog
             w->hydroponic_health += 4.0*used;
             if (inv_stock(&w->inv, "Plant") > 0.0) inv_add(&w->inv, "Plant", 0.25*used, 100.0);
         } else {
+            json_emit_task_note(log, "task_failed", day, tick, ch, task, "no_water", "No safe, bottled, or raw water was available for the plants.", "high");
             w->hydroponic_health -= 4.0;
         }
     } else if (strcmp(task, "Hydroponics maintenance")==0) {
         w->hydroponics_maintained_today = 1;
         if (inv_consume(&w->inv, "Fertilizer", 0.25) > 0.0) w->hydroponic_health += 6.0;
-        else w->hydroponic_health += 3.0;
+        else {
+            json_emit_task_note(log, "task_warning", day, tick, ch, task, "no_fertilizer", "Maintenance helped, but no fertilizer was available.", "medium");
+            w->hydroponic_health += 3.0;
+        }
     } else if (strcmp(task, "Aquarium maintenance")==0) {
         int has_tank = (inv_stock(&w->inv, "Aquarium") > 0.0) || (inv_stock(&w->inv, "Fish tank") > 0.0);
         if (has_tank && inv_stock(&w->inv, "Fish") > 0.0) ch->morale += 1.0;
@@ -1091,10 +1130,25 @@ static void apply_task_effects(World *w, Character *ch, const char *task, SimLog
     } else if (strcmp(task, "Fish cleaning")==0) {
         double fish = inv_consume(&w->inv, "Fish", 1.0);
         if (fish > 0.0) inv_add(&w->inv, "Food", fish*1.1, 100.0);
+        else json_emit_task_note(log, "task_failed", day, tick, ch, task, "no_fish", "No fish was available to clean.", "medium");
+    } else if (strcmp(task, "Gun smithing")==0) {
+        if (inv_stock(&w->inv, "Rifle") <= 0.0 && inv_stock(&w->inv, "Pistol") <= 0.0 && inv_stock(&w->inv, "Revolver") <= 0.0) {
+            json_emit_task_note(log, "task_failed", day, tick, ch, task, "missing_weapon", "No firearm was available to service.", "high");
+        } else if (inv_stock(&w->inv, "Gun cleaning kit") <= 0.0 && inv_stock(&w->inv, "Gunsmith toolkit") <= 0.0) {
+            json_emit_task_note(log, "task_warning", day, tick, ch, task, "missing_toolkit", "Weapon service was limited without a cleaning kit.", "medium");
+        } else if (inv_cond(&w->inv, "Rifle") < 55.0 || inv_cond(&w->inv, "Gun cleaning kit") < 55.0) {
+            json_emit_task_note(log, "task_warning", day, tick, ch, task, "worn_weapon_or_tool", "The weapon or cleaning kit is worn.", "low");
+        }
     } else if (strcmp(task, "Soldering")==0 || strcmp(task, "Electronics repair")==0) {
         inv_consume(&w->inv, "Solder wire", 0.2);
     } else if (strcmp(task, "Defensive shooting")==0) {
-        if (inv_consume(&w->inv, "Ammunition", 2.0) < 1.0) ch->morale -= 2.0;
+        double spent = inv_consume(&w->inv, "Ammunition", 2.0);
+        if (spent < 1.0) {
+            json_emit_task_note(log, "task_failed", day, tick, ch, task, "no_ammo", "No ammunition was available for defensive shooting.", "high");
+            ch->morale -= 2.0;
+        } else if (spent < 2.0) {
+            json_emit_task_note(log, "task_warning", day, tick, ch, task, "low_ammo", "Only one round was available for defensive shooting.", "medium");
+        }
     } else if (strcmp(task, "Tending a fire")==0 || strcmp(task, "Heating")==0) {
         if (inv_consume(&w->inv, "Firewood", 1.0) <= 0.0) {
             if (inv_consume(&w->inv, "Fuel can", 0.4) <= 0.0) {
@@ -1119,12 +1173,19 @@ static void apply_task_effects(World *w, Character *ch, const char *task, SimLog
         w->shelter.water_raw += gain;
     } else if (strcmp(task, "Water filtration")==0) {
         double filter_capacity = 2.0;
-        if (inv_stock(&w->inv, "Water filter") <= 0.0) filter_capacity = 0.5;
+        if (inv_stock(&w->inv, "Water filter") <= 0.0) {
+            filter_capacity = 0.5;
+            json_emit_task_note(log, "task_warning", day, tick, ch, task, "missing_filter", "Water was filtered slowly without a proper filter.", "medium");
+        } else if (inv_cond(&w->inv, "Water filter") < 55.0) {
+            json_emit_task_note(log, "task_warning", day, tick, ch, task, "poor_filter_condition", "The water filter is worn and should be watched.", "low");
+        }
         if (w->shelter.water_raw > 0.0) {
             double moved = w->shelter.water_raw;
             if (moved > filter_capacity) moved = filter_capacity;
             w->shelter.water_raw -= moved;
             w->shelter.water_safe += moved*0.9;
+        } else {
+            json_emit_task_note(log, "task_failed", day, tick, ch, task, "no_raw_water", "No raw water was available to filter.", "medium");
         }
     } else if (strcmp(task, "First aid")==0) {
         inv_consume(&w->inv, "First-aid box", 0.05);
@@ -1207,7 +1268,7 @@ void run_sim_with_options(World *w, Catalog *cat, Character *A, Character *B, in
                     sim_textf(&log, "    %s completed: %s\n", A->name, completed_task);
                     json_emit_task_event(&log, "task_completed", day, tick, A, completed_task, A->rt_station, 0, A->rt_priority);
                     diag_record_completion(&da, A->rt_task);
-                    apply_task_effects(w, A, completed_task, &log);
+                    apply_task_effects(w, A, completed_task, &log, day, tick);
                     json_emit_inventory_changes(&log, day, tick, "task_completed", A, completed_task, &before, w);
                     inv_snapshot_free(&before);
                     A->rt_task = NULL;
@@ -1224,7 +1285,7 @@ void run_sim_with_options(World *w, Catalog *cat, Character *A, Character *B, in
                     sim_textf(&log, "    %s completed: %s\n", B->name, completed_task);
                     json_emit_task_event(&log, "task_completed", day, tick, B, completed_task, B->rt_station, 0, B->rt_priority);
                     diag_record_completion(&db, B->rt_task);
-                    apply_task_effects(w, B, completed_task, &log);
+                    apply_task_effects(w, B, completed_task, &log, day, tick);
                     json_emit_inventory_changes(&log, day, tick, "task_completed", B, completed_task, &before, w);
                     inv_snapshot_free(&before);
                     B->rt_task = NULL;

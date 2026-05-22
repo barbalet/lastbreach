@@ -3,5 +3,6 @@
 
 /* Expose C voxel randomizer to Swift scene-construction code. */
 #include "VoxelRandomizer.h"
+#include "LastBreachSimulationBridge.h"
 
 #endif

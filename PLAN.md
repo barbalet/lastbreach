@@ -320,6 +320,16 @@ Done when:
 - The visible event sequence matches the simulation event stream.
 - Pausing and stepping ticks does not desynchronize avatars, inventory, or character state.
 
+Implemented simulation bridge:
+
+- The iOS target now bundles `world.lbw`, `catalog.lbc`, `joel.lbp`, and `mara.lbp` alongside the visual catalog.
+- `LastBreachSimulationBridge` runs the shared C simulator in JSONL mode with a deterministic seed and returns the trace to Swift.
+- The iOS app loads bundled scenario files by default and reloads local `dsl/` files in Debug builds for fast scenario iteration.
+- `SimulationBridge.swift` decodes three-day simulation traces into tick snapshots, timeline events, inventory stacks, active character tasks, and world state.
+- The main panel now has play, pause, next-tick, run-day, and reload controls for the simulation trace.
+- Character needs, active tasks, inventory props, visible stations, and event log rows are rebuilt from the current simulation tick.
+- Scene action animation is triggered from simulator `task_started` events, keeping visual action playback tied to the C event stream.
+
 ## Cycle 8: Gameplay Balance and Failure Readability
 
 Goal: make the playable loop understandable and strategically meaningful.
@@ -341,6 +351,14 @@ Done when:
 - Ignoring plants causes visible decline and lower harvests.
 - Maintaining plants produces visible food progress.
 - Ignoring gunsmithing/repair creates visible defense risk.
+
+Implemented in Cycle 8:
+
+- Rebalanced the default world to start with tight water, food, ammunition, structure, fertilizer, and worn gun/water tools so the first three simulated days surface plant care, filtration, food pressure, rest pressure, repair/gunsmith risk, and guaranteed breaches.
+- Added simulation `task_failed` and `task_warning` JSON notes for missing food, water, fertilizer, fish, ammunition, weapon/tool requirements, worn tools, and missing raw water.
+- Added iOS weak-link alerts for water, food, hungry/tired survivors, structure, ammunition, plants, and worn gear.
+- Propagated world status and item condition into the SceneKit layout so stations/items show low, empty, worn, dry, wilted, and damaged states.
+- Updated the iOS event log to render warnings/failures with distinct icons and colors.
 
 ## Cycle 9: Persistence, Editing, and Save Flow
 

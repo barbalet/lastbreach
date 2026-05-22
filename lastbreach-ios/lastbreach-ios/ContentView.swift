@@ -10,12 +10,38 @@ struct ContentView: View {
     @State private var planningState: DayPlanningState
     @State private var selectedEntityID: String?
     @State private var scene: SCNScene
+    @State private var simulationTrace: SimulationTrace
+    @State private var simulationTickIndex: Int
+    @State private var simulationSeed: UInt32
+    @State private var simulationStatus: String
+    @State private var isSimulationPlaying = false
+    @State private var playbackTask: Task<Void, Never>?
 
     init() {
         let catalog = VisualCatalog.loadBundled()
-        let state = VisualSceneState.firstPlayable
+        let seed = SimulationScenarioSources.defaultSeed
+        let trace: SimulationTrace
+        let status: String
+        do {
+            trace = try SimulationTrace.loadDefault(days: 3, seed: seed)
+            status = "Loaded \(trace.days) days from \(trace.sourceMode.title)"
+        } catch {
+            trace = .empty
+            status = error.localizedDescription
+        }
+
+        let state = VisualSceneState.simulationBacked(
+            snapshot: trace.initialSnapshot,
+            catalog: catalog,
+            fallback: .firstPlayable,
+            featuredTaskIds: VisualSceneState.firstPlayable.featuredTaskIds
+        )
         let layout = VisualSceneLayout(catalog: catalog, state: state)
-        let planning = DayPlanningState.firstPlayable(sceneState: state)
+        let planning = DayPlanningState.simulationDriven(
+            sceneState: state,
+            catalog: catalog,
+            snapshot: trace.initialSnapshot
+        )
         let initialSelection = "character.joel"
         let scene = VoxelSceneFactory.makeScene(
             size: 7,
@@ -30,6 +56,10 @@ struct ContentView: View {
         _planningState = State(initialValue: planning)
         _selectedEntityID = State(initialValue: initialSelection)
         _scene = State(initialValue: scene)
+        _simulationTrace = State(initialValue: trace)
+        _simulationTickIndex = State(initialValue: -1)
+        _simulationSeed = State(initialValue: seed)
+        _simulationStatus = State(initialValue: status)
     }
 
     var body: some View {
@@ -70,19 +100,46 @@ struct ContentView: View {
             }
             .background(Color.black)
         }
+        .onDisappear {
+            stopPlayback()
+        }
     }
 
     private var selectedEntity: VisualSceneEntity? {
         sceneLayout.entity(withID: selectedEntityID)
     }
 
-    private var taskOptions: [VisualTask] {
-        visualCatalog.tasks.sorted { left, right in
-            if left.stationId == right.stationId {
-                return left.name < right.name
-            }
-            return left.stationId < right.stationId
+    private var currentSnapshot: SimulationSnapshot? {
+        if simulationTickIndex >= 0 && simulationTickIndex < simulationTrace.snapshots.count {
+            return simulationTrace.snapshots[simulationTickIndex]
         }
+        return simulationTrace.initialSnapshot
+    }
+
+    private var currentKey: SimulationTimelineKey? {
+        if simulationTickIndex >= 0 && simulationTickIndex < simulationTrace.snapshots.count {
+            return simulationTrace.snapshots[simulationTickIndex].key
+        }
+        return nil
+    }
+
+    private var currentTimelineText: String {
+        guard let key = currentKey else {
+            return "Ready"
+        }
+        return "Day \(key.day + 1) Tick \(key.tick)"
+    }
+
+    private var canAdvanceSimulation: Bool {
+        simulationTickIndex < simulationTrace.lastSnapshotIndex
+    }
+
+    private var recentSimulationEvents: [SimulationTimelineEvent] {
+        Array(simulationTrace.events(through: currentKey).suffix(7).reversed())
+    }
+
+    private var currentAlerts: [SimulationWeakLinkAlert] {
+        Array((currentSnapshot?.weakLinkAlerts ?? []).prefix(6))
     }
 
     private var topControls: some View {
@@ -121,33 +178,24 @@ struct ContentView: View {
 
     private func planningPanel(maxHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Button {
-                    startDay()
-                } label: {
-                    Label("Start day", systemImage: "play.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(PlanningPrimaryButtonStyle())
-
-                Button {
-                    resetPlanning()
-                } label: {
-                    Image(systemName: "wand.and.stars")
-                        .frame(width: 36, height: 34)
-                }
-                .accessibilityLabel("Auto plan")
-                .buttonStyle(PlanningIconButtonStyle())
-            }
+            simulationControls
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
+                    if !currentAlerts.isEmpty {
+                        alertsPanel
+                    }
+
                     ForEach(planningState.characters) { character in
                         characterCard(for: character)
                     }
 
                     if !planningState.queuedSchedule.isEmpty {
                         schedulePanel
+                    }
+
+                    if !recentSimulationEvents.isEmpty {
+                        eventLogPanel
                     }
                 }
                 .padding(.bottom, 2)
@@ -160,12 +208,115 @@ struct ContentView: View {
         .foregroundStyle(.white)
     }
 
+    private var simulationControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Button {
+                    toggleSimulationPlayback()
+                } label: {
+                    Label(isSimulationPlaying ? "Pause" : "Play", systemImage: isSimulationPlaying ? "pause.fill" : "play.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .disabled(!canAdvanceSimulation)
+                .buttonStyle(PlanningPrimaryButtonStyle())
+
+                Button {
+                    advanceSimulationTick(animated: true)
+                } label: {
+                    Image(systemName: "forward.frame.fill")
+                        .frame(width: 36, height: 34)
+                }
+                .disabled(!canAdvanceSimulation)
+                .accessibilityLabel("Next tick")
+                .buttonStyle(PlanningIconButtonStyle())
+
+                Button {
+                    runCurrentSimulationDay()
+                } label: {
+                    Image(systemName: "sun.max.fill")
+                        .frame(width: 36, height: 34)
+                }
+                .disabled(!canAdvanceSimulation)
+                .accessibilityLabel("Run day")
+                .buttonStyle(PlanningIconButtonStyle())
+
+                Button {
+                    reloadSimulation()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .frame(width: 36, height: 34)
+                }
+                .accessibilityLabel("Reload simulation")
+                .buttonStyle(PlanningIconButtonStyle())
+            }
+
+            HStack(spacing: 6) {
+                Text(currentTimelineText)
+                    .font(.caption.weight(.bold))
+                Text("Seed \(simulationSeed)")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.64))
+                Text(simulationTrace.sourceMode.title)
+                    .font(.caption2.weight(.bold))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                Spacer(minLength: 0)
+            }
+
+            Text(simulationStatus)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.64))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var alertsPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Weak Links")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white.opacity(0.72))
+
+            ForEach(currentAlerts) { alert in
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: alert.systemImage)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(alertColor(alert.severity))
+                        .frame(width: 18, height: 18)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(alert.title)
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.76)
+
+                        Text(alert.detail)
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.64))
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 2)
+            }
+        }
+        .padding(10)
+        .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(currentAlerts.contains { $0.severity == .critical } ? Color.orange.opacity(0.62) : .white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
     private func characterCard(for character: PlanningCharacter) -> some View {
         let assignment = planningState.assignment(for: character)
         let task = visualCatalog.tasksByID[assignment.taskId]
         let validation = task.map {
             DayPlanningState.validate(task: $0, catalog: visualCatalog, sceneState: sceneState)
-        } ?? TaskValidation(isValid: false, missingRequirements: ["task"], lowStockWarnings: [])
+        } ?? TaskValidation(isValid: true, missingRequirements: [], lowStockWarnings: [])
 
         return VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 8) {
@@ -188,35 +339,18 @@ struct ContentView: View {
                 Spacer(minLength: 0)
 
                 Button {
-                    planningState.resetAutomatic(for: character)
                     selectEntity("character.\(character.id)")
                 } label: {
-                    Image(systemName: "arrow.triangle.2.circlepath")
+                    Image(systemName: "scope")
                         .frame(width: 28, height: 28)
                 }
-                .accessibilityLabel("Reset \(character.name)")
+                .accessibilityLabel("Select \(character.name)")
                 .buttonStyle(PlanningIconButtonStyle(compact: true))
             }
 
             needsGrid(for: character.needs)
 
-            HStack(spacing: 8) {
-                taskMenu(for: character, assignment: assignment)
-
-                Stepper(
-                    value: Binding(
-                        get: { planningState.assignment(for: character).priority },
-                        set: { planningState.setPriority($0, for: character) }
-                    ),
-                    in: 1...10
-                ) {
-                    Text("P\(assignment.priority)")
-                        .font(.caption.weight(.semibold))
-                        .frame(width: 28, alignment: .leading)
-                }
-                .labelsHidden()
-                .tint(.white)
-            }
+            simulationTaskRow(task: task, assignment: assignment)
 
             statusLine(for: character, validation: validation)
         }
@@ -228,34 +362,36 @@ struct ContentView: View {
         )
     }
 
-    private func taskMenu(for character: PlanningCharacter, assignment: PlanningAssignment) -> some View {
-        let selectedTask = visualCatalog.tasksByID[assignment.taskId]
+    private func simulationTaskRow(task: VisualTask?, assignment: PlanningAssignment) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: task == nil ? "pause.circle.fill" : "gearshape.2.fill")
+                .foregroundStyle(task == nil ? .white.opacity(0.48) : Color(red: 0.75, green: 0.93, blue: 0.58))
 
-        return Menu {
-            ForEach(taskOptions) { task in
-                let validation = DayPlanningState.validate(task: task, catalog: visualCatalog, sceneState: sceneState)
-                Button {
-                    planningState.setTask(task.id, for: character)
-                    selectEntity("station.\(task.stationId)")
-                } label: {
-                    Label(task.name, systemImage: validation.isValid ? "checkmark.circle" : "exclamationmark.triangle")
-                }
-            }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "list.bullet.rectangle")
-                Text(selectedTask?.name ?? "Select task")
+            VStack(alignment: .leading, spacing: 1) {
+                Text(task?.name ?? "Idle")
+                    .font(.caption.weight(.semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.caption2.weight(.bold))
+
+                Text(task.map { sceneLayout.stationName(for: $0.stationId) ?? $0.stationId } ?? "Awaiting scheduler")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.56))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
             }
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 9)
-            .frame(height: 34)
-            .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            Spacer(minLength: 0)
+
+            Text("P\(assignment.priority)")
+                .font(.caption.monospacedDigit().weight(.bold))
+                .frame(minWidth: 30)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 5)
+                .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
+        .padding(.horizontal, 9)
+        .frame(height: 40)
+        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private func needsGrid(for needs: CharacterNeeds) -> some View {
@@ -305,7 +441,7 @@ struct ContentView: View {
 
     private var schedulePanel: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Queue")
+            Text("Active")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(.white.opacity(0.72))
 
@@ -328,6 +464,38 @@ struct ContentView: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.72)
                     }
+
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(10)
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var eventLogPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Events")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white.opacity(0.72))
+
+            ForEach(recentSimulationEvents) { event in
+                HStack(alignment: .top, spacing: 8) {
+                    Text(eventTimestamp(event))
+                        .font(.caption2.monospacedDigit().weight(.bold))
+                        .foregroundStyle(.white.opacity(0.52))
+                        .frame(width: 42, alignment: .leading)
+
+                    Image(systemName: eventSymbol(event))
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(eventColor(event))
+                        .frame(width: 14, height: 14)
+
+                    Text(event.label)
+                        .font(.caption2)
+                        .foregroundStyle(eventColor(event).opacity(event.type == "task_failed" ? 1.0 : 0.82))
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     Spacer(minLength: 0)
                 }
@@ -381,37 +549,133 @@ struct ContentView: View {
         VoxelSceneFactory.updateSelection(entityID, in: scene)
     }
 
-    private func startDay() {
-        planningState.buildSchedule(catalog: visualCatalog, sceneState: sceneState)
-
-        var taskIds: [String] = []
-        for scheduled in planningState.queuedSchedule where !taskIds.contains(scheduled.task.id) {
-            taskIds.append(scheduled.task.id)
+    private func toggleSimulationPlayback() {
+        if isSimulationPlaying {
+            stopPlayback()
+        } else {
+            startPlayback()
         }
-
-        sceneState = VisualSceneState(
-            characters: sceneState.characters,
-            inventory: sceneState.inventory,
-            featuredTaskIds: taskIds
-        )
-
-        let layout = VisualSceneLayout(catalog: visualCatalog, state: sceneState)
-        sceneLayout = layout
-        VoxelSceneFactory.rebuildEntities(in: scene, layout: layout, selectedEntityID: selectedEntityID)
-        VoxelSceneFactory.setRenderMode(removeEnvironment, showGrid: showGrid, in: scene)
-        SceneActionAnimator.play(
-            schedule: planningState.queuedSchedule,
-            layout: layout,
-            catalog: visualCatalog,
-            in: scene
-        )
     }
 
-    private func resetPlanning() {
-        planningState.resetAllAutomatic()
-        planningState.queuedSchedule = []
-        _ = VoxelSceneFactory.actionContainer(in: scene, reset: true)
-        selectEntity("character.joel")
+    private func startPlayback() {
+        guard canAdvanceSimulation else {
+            return
+        }
+        isSimulationPlaying = true
+        playbackTask?.cancel()
+        playbackTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 850_000_000)
+                await MainActor.run {
+                    if canAdvanceSimulation {
+                        advanceSimulationTick(animated: true)
+                    } else {
+                        stopPlayback()
+                    }
+                }
+            }
+        }
+    }
+
+    private func stopPlayback() {
+        isSimulationPlaying = false
+        playbackTask?.cancel()
+        playbackTask = nil
+    }
+
+    private func advanceSimulationTick(animated: Bool) {
+        guard canAdvanceSimulation else {
+            stopPlayback()
+            return
+        }
+
+        let nextIndex = simulationTickIndex + 1
+        simulationTickIndex = nextIndex
+        let snapshot = simulationTrace.snapshots[nextIndex]
+        let events = simulationTrace.events(at: snapshot.key)
+        applySimulationSnapshot(snapshot, events: events, animate: animated)
+    }
+
+    private func runCurrentSimulationDay() {
+        stopPlayback()
+        guard canAdvanceSimulation else {
+            return
+        }
+
+        let firstIndex = simulationTickIndex + 1
+        guard firstIndex < simulationTrace.snapshots.count else {
+            return
+        }
+
+        let targetDay = simulationTrace.snapshots[firstIndex].key.day
+        var lastIndex = firstIndex
+        while lastIndex + 1 < simulationTrace.snapshots.count,
+              simulationTrace.snapshots[lastIndex + 1].key.day == targetDay {
+            lastIndex += 1
+        }
+
+        let startKey = currentKey
+        let snapshot = simulationTrace.snapshots[lastIndex]
+        let events = simulationTrace.events(forDay: targetDay, startingAfter: startKey)
+        simulationTickIndex = lastIndex
+        applySimulationSnapshot(snapshot, events: events, animate: true)
+    }
+
+    private func reloadSimulation() {
+        stopPlayback()
+        do {
+            let trace = try SimulationTrace.loadDefault(days: 3, seed: simulationSeed)
+            simulationTrace = trace
+            simulationTickIndex = -1
+            simulationStatus = "Loaded \(trace.days) days from \(trace.sourceMode.title)"
+            applySimulationSnapshot(trace.initialSnapshot, events: [], animate: false)
+            selectEntity("character.joel")
+        } catch {
+            simulationTrace = .empty
+            simulationTickIndex = -1
+            simulationStatus = error.localizedDescription
+            applySimulationSnapshot(nil, events: [], animate: false)
+        }
+    }
+
+    private func applySimulationSnapshot(
+        _ snapshot: SimulationSnapshot?,
+        events: [SimulationTimelineEvent],
+        animate: Bool
+    ) {
+        let featuredTaskIds = events.compactMap(\.taskID)
+        let nextState = VisualSceneState.simulationBacked(
+            snapshot: snapshot,
+            catalog: visualCatalog,
+            fallback: .firstPlayable,
+            featuredTaskIds: featuredTaskIds.isEmpty ? sceneState.featuredTaskIds : featuredTaskIds
+        )
+        let nextPlanning = DayPlanningState.simulationDriven(
+            sceneState: nextState,
+            catalog: visualCatalog,
+            snapshot: snapshot
+        )
+        let layout = VisualSceneLayout(catalog: visualCatalog, state: nextState)
+        let selection = selectedEntityID.flatMap { layout.entity(withID: $0)?.id } ?? "character.joel"
+
+        sceneState = nextState
+        planningState = nextPlanning
+        sceneLayout = layout
+        selectedEntityID = selection
+        VoxelSceneFactory.rebuildEntities(in: scene, layout: layout, selectedEntityID: selection)
+        VoxelSceneFactory.setRenderMode(removeEnvironment, showGrid: showGrid, in: scene)
+
+        if animate {
+            let schedule = DayPlanningState.simulatedSchedule(
+                from: events,
+                catalog: visualCatalog,
+                sceneState: nextState,
+                characters: nextPlanning.characters
+            )
+            SceneActionAnimator.play(schedule: schedule, layout: layout, catalog: visualCatalog, in: scene)
+        } else {
+            _ = VoxelSceneFactory.actionContainer(in: scene, reset: true)
+        }
     }
 
     private func rebuildScene() {
@@ -421,12 +685,68 @@ struct ContentView: View {
         VoxelSceneFactory.setRenderMode(removeEnvironment, showGrid: showGrid, in: scene)
     }
 
+    private func eventTimestamp(_ event: SimulationTimelineEvent) -> String {
+        guard let key = event.key else {
+            return "--"
+        }
+        return "D\(key.day + 1):\(String(format: "%02d", key.tick))"
+    }
+
+    private func alertColor(_ severity: SimulationAlertSeverity) -> Color {
+        switch severity {
+        case .critical:
+            return .orange
+        case .warning:
+            return .yellow
+        case .info:
+            return Color(red: 0.65, green: 0.82, blue: 1.0)
+        }
+    }
+
+    private func eventColor(_ event: SimulationTimelineEvent) -> Color {
+        switch event.type {
+        case "task_failed":
+            return .orange
+        case "task_warning":
+            return .yellow
+        case "breach", "breach_impact":
+            return Color(red: 1.0, green: 0.55, blue: 0.36)
+        case "harvest", "inventory_changed":
+            return Color(red: 0.70, green: 0.92, blue: 0.48)
+        default:
+            return .white.opacity(0.76)
+        }
+    }
+
+    private func eventSymbol(_ event: SimulationTimelineEvent) -> String {
+        switch event.type {
+        case "task_failed":
+            return "xmark.octagon.fill"
+        case "task_warning":
+            return "exclamationmark.triangle.fill"
+        case "breach", "breach_impact":
+            return "shield.lefthalf.filled"
+        case "harvest":
+            return "leaf.fill"
+        case "inventory_changed":
+            return "shippingbox.fill"
+        case "task_started":
+            return "play.circle.fill"
+        case "task_completed":
+            return "checkmark.circle.fill"
+        default:
+            return "circle.fill"
+        }
+    }
+
     private func sourceColor(_ source: PlanningSource) -> Color {
         switch source {
         case .automatic:
             return Color(red: 0.65, green: 0.82, blue: 1.0)
         case .playerOverride:
             return Color(red: 1.0, green: 0.78, blue: 0.30)
+        case .simulation:
+            return Color(red: 0.75, green: 0.93, blue: 0.58)
         }
     }
 

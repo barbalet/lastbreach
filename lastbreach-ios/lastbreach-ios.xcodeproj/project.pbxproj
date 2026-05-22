@@ -8,11 +8,19 @@
 
 /* Begin PBXBuildFile section */
 		A1B2C3D4E5F6011111111130 /* visual_catalog.json in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6011111111131 /* visual_catalog.json */; };
+		A1B2C3D4E5F6011111111132 /* world.lbw in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6011111111133 /* world.lbw */; };
+		A1B2C3D4E5F6011111111134 /* catalog.lbc in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6011111111135 /* catalog.lbc */; };
+		A1B2C3D4E5F6011111111136 /* joel.lbp in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6011111111137 /* joel.lbp */; };
+		A1B2C3D4E5F6011111111138 /* mara.lbp in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6011111111139 /* mara.lbp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A1B2C3D4E5F6011111111111 /* lastbreach-ios.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "lastbreach-ios.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1B2C3D4E5F6011111111131 /* visual_catalog.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = ../dsl/visual_catalog.json; sourceTree = "<group>"; };
+		A1B2C3D4E5F6011111111133 /* world.lbw */ = {isa = PBXFileReference; lastKnownFileType = text; path = ../dsl/world.lbw; sourceTree = "<group>"; };
+		A1B2C3D4E5F6011111111135 /* catalog.lbc */ = {isa = PBXFileReference; lastKnownFileType = text; path = ../dsl/catalog.lbc; sourceTree = "<group>"; };
+		A1B2C3D4E5F6011111111137 /* joel.lbp */ = {isa = PBXFileReference; lastKnownFileType = text; path = ../dsl/joel.lbp; sourceTree = "<group>"; };
+		A1B2C3D4E5F6011111111139 /* mara.lbp */ = {isa = PBXFileReference; lastKnownFileType = text; path = ../dsl/mara.lbp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -39,6 +47,10 @@
 			children = (
 				A1B2C3D4E5F6011111111112 /* lastbreach-ios */,
 				A1B2C3D4E5F6011111111131 /* visual_catalog.json */,
+				A1B2C3D4E5F6011111111133 /* world.lbw */,
+				A1B2C3D4E5F6011111111135 /* catalog.lbc */,
+				A1B2C3D4E5F6011111111137 /* joel.lbp */,
+				A1B2C3D4E5F6011111111139 /* mara.lbp */,
 				A1B2C3D4E5F6011111111115 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -116,6 +128,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1B2C3D4E5F6011111111130 /* visual_catalog.json in Resources */,
+				A1B2C3D4E5F6011111111132 /* world.lbw in Resources */,
+				A1B2C3D4E5F6011111111134 /* catalog.lbc in Resources */,
+				A1B2C3D4E5F6011111111136 /* joel.lbp in Resources */,
+				A1B2C3D4E5F6011111111138 /* mara.lbp in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -187,6 +203,10 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"../lastbreach-mac/lastbreach-mac/include",
+				);
 				INFOPLIST_KEY_CFBundleDisplayName = "lastbreach-ios";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -217,6 +237,10 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"../lastbreach-mac/lastbreach-mac/include",
+				);
 				INFOPLIST_KEY_CFBundleDisplayName = "lastbreach-ios";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

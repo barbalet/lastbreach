@@ -4,6 +4,7 @@ import UIKit
 enum PlanningSource: String {
     case automatic
     case playerOverride
+    case simulation
 
     var title: String {
         switch self {
@@ -11,6 +12,8 @@ enum PlanningSource: String {
             return "Auto"
         case .playerOverride:
             return "Override"
+        case .simulation:
+            return "Sim"
         }
     }
 }
@@ -190,6 +193,12 @@ struct DayPlanningState {
         sceneState: VisualSceneState
     ) -> TaskValidation {
         let inventoryByID = Dictionary(uniqueKeysWithValues: sceneState.inventory.map { ($0.itemId, $0.quantity) })
+        let conditionByID = Dictionary(uniqueKeysWithValues: sceneState.inventory.compactMap { stack -> (String, Double)? in
+            guard let condition = stack.condition else {
+                return nil
+            }
+            return (stack.itemId, condition)
+        })
         let stationProps = Set(catalog.stations.flatMap(\.props))
         let itemNamesByID = Dictionary(uniqueKeysWithValues: catalog.items.map { ($0.id, $0.name) })
         let stationProvided = Set([
@@ -218,6 +227,11 @@ struct DayPlanningState {
             } else if quantity <= 1 {
                 lowStock.append(itemNamesByID[propId] ?? displayName(from: propId))
             }
+
+            if let condition = conditionByID[propId], condition <= 55.0 {
+                let name = itemNamesByID[propId] ?? displayName(from: propId)
+                lowStock.append("\(name) condition")
+            }
         }
 
         return TaskValidation(
@@ -227,7 +241,7 @@ struct DayPlanningState {
         )
     }
 
-    private static func defaultNeeds(for characterId: String) -> CharacterNeeds {
+    static func defaultNeeds(for characterId: String) -> CharacterNeeds {
         if characterId == "mara" {
             return CharacterNeeds(hunger: 0.42, hydration: 0.58, fatigue: 0.34, morale: 0.63, injury: 0.08, illness: 0.04)
         }
