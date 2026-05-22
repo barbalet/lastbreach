@@ -44,7 +44,7 @@ enum VoxelCharacterFactory {
         }
     }
 
-    private static func makeCharacter(voxelSize: CGFloat, bodyColor: UIColor, trimColor: UIColor, skinColor: UIColor) -> SCNNode {
+    static func makeCharacter(voxelSize: CGFloat, bodyColor: UIColor, trimColor: UIColor, skinColor: UIColor) -> SCNNode {
         let root = SCNNode()
 
         let bodyMaterial = makeCharacterMaterial(color: bodyColor, roughness: 0.70)

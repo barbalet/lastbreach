@@ -201,6 +201,8 @@ Implemented catalog:
 
 ## Cycle 4: iOS Scene Entity System
 
+Status: complete.
+
 Goal: replace the one-off visual scene with a small game scene model.
 
 Work:
@@ -219,7 +221,18 @@ Done when:
 - Important inventory objects appear at their stations.
 - The scene can rebuild from a loaded state without duplicating nodes.
 
+Implemented scene layer:
+
+- `VisualSceneModel.swift` defines scene entity kinds for characters, stations, items, props, task markers, and outcome labels.
+- `VisualSceneState.firstPlayable` provides the initial playable shelter state with Joel, Mara, key tools, water, weapons, fertilizer, food, and produce markers.
+- `VisualSceneLayout` builds deterministic entity positions from `VisualCatalog` station anchors and item station affinities.
+- `VoxelSceneFactory` now owns a named entity container and `rebuildEntities(...)`, which removes and replaces the entity layer for future loaded snapshots.
+- The iOS scene renders all catalog stations, station props, first-playable inventory markers, featured task markers, and floating visible-output labels inside the existing voxel shell.
+- `LastBreachSceneView` wraps `SCNView` with tap hit testing; selected entities get a SceneKit highlight and a compact SwiftUI inspector.
+
 ## Cycle 5: Character Control and Day Planning UI
+
+Status: complete.
 
 Goal: let the player make meaningful assignments before time runs.
 
@@ -239,7 +252,19 @@ Done when:
 - Starting the day produces a clear schedule or task queue.
 - The UI can handle both automatic DSL-driven plans and player overrides.
 
+Implemented planning layer:
+
+- `DayPlanningModel.swift` defines character needs, automatic/player-overridden assignments, task validation, and scheduled queue rows.
+- The current-day planning panel is layered over the SceneKit shelter without replacing the main scene view.
+- Joel and Mara have compact character cards with hunger, hydration, fatigue, morale, injury, and illness meters.
+- Task menus are built from `VisualCatalog.tasks`, so the UI follows the DSL-backed catalog instead of a hardcoded task list.
+- Validation checks task props against current inventory and station-provided props, then reports missing requirements or low-stock warnings.
+- Priority controls support player overrides, while auto-plan reset restores the DSL-style automatic defaults.
+- Starting the day builds a visible task queue sorted by priority and rebuilds the scene task markers from the queued assignments.
+
 ## Cycle 6: Core Action Animation Pass
+
+Status: complete.
 
 Goal: make the requested actions visibly happen in the world.
 
@@ -262,6 +287,19 @@ Done when:
 - Gunsmithing, watering, fertilizing, and harvesting all have distinct animations.
 - Tomatoes, carrots, chilis, and basil have distinct visible produce forms.
 - Station and prop visibility matches the simulation state.
+
+Implemented animation layer:
+
+- `SceneActionAnimator.swift` plays the queued day schedule against the existing SceneKit entity layer.
+- Starting the day moves each valid assigned character from their current scene position to the assigned station anchor.
+- The scene now has a resettable action-effects container, so repeated starts or scene rebuilds do not stack old effects.
+- Gunsmithing shows a bench, rifle, tool motion, and spark/readiness feedback.
+- Watering plants shows a watering can, looping water droplets, and plant feedback.
+- Hydroponics maintenance shows fertilizer grains, plant growth, visible produce, and a harvest transfer cue.
+- Tomatoes, carrots, chilis, and basil have distinct produce forms/colors in the harvest effect.
+- Cooking/eating-style tasks show stove/bowl/steam cues; water filtration shows raw water, filter, clean water, and flow droplets.
+- Defensive shooting/combat show barricade motion, weapon pose, and muzzle-flash or impact feedback.
+- Blocked scheduled tasks produce a visible warning label at the relevant station.
 
 ## Cycle 7: Simulation Bridge in the iOS App
 

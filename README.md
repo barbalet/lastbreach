@@ -84,6 +84,12 @@ Emit machine-readable JSON lines for tools or the future iOS bridge:
 
 The app bundles `dsl/visual_catalog.json` and decodes it at launch so SceneKit/UI code can map simulation task and item names to visual stations, props, poses, and output effects.
 
+The current scene builds a catalog-backed shelter layout with selectable character avatars, stations, props, inventory markers, featured task markers, and a compact inspector panel.
+
+The current-day planning panel can assign or override Joel and Mara's tasks, adjust priority, validate requirements against inventory/station props, and build the visible task queue for the day.
+
+Starting the day now animates queued actions in the shelter: avatars move to assigned stations and task-specific effects show gunsmithing, plant watering/fertilizing/harvesting, cooking, water filtering, and defense work.
+
 Open `lastbreach-ios/lastbreach-ios.xcodeproj` in Xcode, select the `lastbreach-ios` scheme, choose an iPhone or iPad simulator, and run the app.
 
 Command-line build check:

@@ -44,8 +44,13 @@ struct VoxelCell {
 }
 
 enum VoxelSceneFactory {
+    private static let voxelContainerName = "voxelContainer"
     private static let fullEnvironmentContainerName = "fullEnvironmentContainer"
     private static let interfacesOnlyContainerName = "interfacesOnlyContainer"
+    private static let entityContainerName = "lastbreachEntityContainer"
+    private static let actionContainerName = "lastbreachActionContainer"
+    private static let selectionHaloName = "selectionHalo"
+    private static let entityNamePrefix = "lastbreach.entity."
     private static let voxelUnit = CGFloat(0.05)
 
     private static let wallMaterial = makeOpaqueFaceMaterial(
@@ -87,10 +92,16 @@ enum VoxelSceneFactory {
         return material
     }()
 
-    static func makeScene(size: Int, interfacesOnly: Bool = false) -> SCNScene {
+    static func makeScene(
+        size: Int,
+        interfacesOnly: Bool = false,
+        layout: VisualSceneLayout? = nil,
+        selectedEntityID: String? = nil
+    ) -> SCNScene {
         let scene = SCNScene()
 
         let voxelContainer = SCNNode()
+        voxelContainer.name = voxelContainerName
         let fullEnvironmentContainer = SCNNode()
         fullEnvironmentContainer.name = fullEnvironmentContainerName
 
@@ -108,8 +119,10 @@ enum VoxelSceneFactory {
         addLights(to: scene)
         addVoxels(to: fullEnvironmentContainer, grid: grid, size: size, interfacesOnly: false)
         addVoxels(to: interfacesOnlyContainer, grid: grid, size: size, interfacesOnly: true)
-        VoxelCharacterFactory.addCharacters(to: voxelContainer, size: size, voxelUnit: voxelUnit)
         setRenderMode(interfacesOnly, showGrid: true, in: scene)
+        if let layout {
+            rebuildEntities(in: scene, layout: layout, selectedEntityID: selectedEntityID)
+        }
 
         let spin = SCNAction.repeatForever(
             SCNAction.rotateBy(x: 0.0, y: .pi * 2.0, z: .pi / 8.0, duration: 26.0)
@@ -131,6 +144,298 @@ enum VoxelSceneFactory {
 
         fullEnvironmentContainer?.isHidden = interfacesOnly
         interfacesOnlyContainer?.isHidden = !interfacesOnly
+    }
+
+    static func rebuildEntities(
+        in scene: SCNScene,
+        layout: VisualSceneLayout,
+        selectedEntityID: String?
+    ) {
+        let parent = scene.rootNode.childNode(withName: voxelContainerName, recursively: true) ?? scene.rootNode
+        parent.childNode(withName: entityContainerName, recursively: false)?.removeFromParentNode()
+        parent.childNode(withName: actionContainerName, recursively: false)?.removeFromParentNode()
+
+        let entityContainer = SCNNode()
+        entityContainer.name = entityContainerName
+
+        for entity in layout.entities {
+            entityContainer.addChildNode(makeEntityNode(for: entity))
+        }
+
+        parent.addChildNode(entityContainer)
+        updateSelection(selectedEntityID, in: scene)
+    }
+
+    static func updateSelection(_ selectedEntityID: String?, in scene: SCNScene) {
+        guard let entityContainer = scene.rootNode.childNode(withName: entityContainerName, recursively: true) else {
+            return
+        }
+
+        for node in entityContainer.childNodes {
+            guard let entityID = entityID(from: node) else {
+                continue
+            }
+
+            let isSelected = entityID == selectedEntityID
+            node.childNode(withName: selectionHaloName, recursively: false)?.isHidden = !isSelected
+
+            let scale: Float = isSelected ? 1.12 : 1.0
+            node.scale = SCNVector3(scale, scale, scale)
+        }
+    }
+
+    static func entityID(containing node: SCNNode?) -> String? {
+        var cursor = node
+        while let current = cursor {
+            if let entityID = entityID(from: current) {
+                return entityID
+            }
+            cursor = current.parent
+        }
+        return nil
+    }
+
+    static func node(forEntityID entityID: String, in scene: SCNScene) -> SCNNode? {
+        scene.rootNode.childNode(withName: "\(entityNamePrefix)\(entityID)", recursively: true)
+    }
+
+    static func actionContainer(in scene: SCNScene, reset: Bool = false) -> SCNNode {
+        let parent = scene.rootNode.childNode(withName: voxelContainerName, recursively: true) ?? scene.rootNode
+
+        if reset {
+            parent.childNode(withName: actionContainerName, recursively: false)?.removeFromParentNode()
+        } else if let existing = parent.childNode(withName: actionContainerName, recursively: false) {
+            return existing
+        }
+
+        let container = SCNNode()
+        container.name = actionContainerName
+        parent.addChildNode(container)
+        return container
+    }
+
+    private static func makeEntityNode(for entity: VisualSceneEntity) -> SCNNode {
+        let root = SCNNode()
+        root.position = entity.position
+
+        if entity.isSelectable {
+            root.name = "\(entityNamePrefix)\(entity.id)"
+            root.addChildNode(makeSelectionHalo(radius: selectionRadius(for: entity.kind)))
+        }
+
+        switch entity.kind {
+        case .character:
+            root.addChildNode(makeCharacterNode(for: entity))
+        case .station:
+            root.addChildNode(makeStationNode(for: entity))
+        case .item:
+            root.addChildNode(makeItemNode(for: entity))
+        case .prop:
+            root.addChildNode(makePropNode(for: entity))
+        case .taskMarker:
+            root.addChildNode(makeTaskMarkerNode(for: entity))
+        case .outcomeLabel:
+            root.addChildNode(makeOutcomeLabelNode(for: entity))
+        }
+
+        return root
+    }
+
+    private static func entityID(from node: SCNNode) -> String? {
+        guard let name = node.name, name.hasPrefix(entityNamePrefix) else {
+            return nil
+        }
+        return String(name.dropFirst(entityNamePrefix.count))
+    }
+
+    private static func makeCharacterNode(for entity: VisualSceneEntity) -> SCNNode {
+        let skinColor = entity.id.contains("mara")
+            ? UIColor(red: 0.95, green: 0.79, blue: 0.69, alpha: 1.0)
+            : UIColor(red: 0.96, green: 0.84, blue: 0.73, alpha: 1.0)
+        let character = VoxelCharacterFactory.makeCharacter(
+            voxelSize: voxelUnit,
+            bodyColor: entity.swatch,
+            trimColor: UIColor(red: 0.16, green: 0.19, blue: 0.23, alpha: 1.0),
+            skinColor: skinColor
+        )
+        character.eulerAngles = SCNVector3(0, entity.id.contains("mara") ? -Float.pi * 0.20 : Float.pi * 0.18, 0)
+
+        let label = makeLabel(entity.name, color: .white, scale: 0.0042)
+        label.position = SCNVector3(0, Float(voxelUnit * 2.22), 0)
+        character.addChildNode(label)
+        return character
+    }
+
+    private static func makeStationNode(for entity: VisualSceneEntity) -> SCNNode {
+        let root = SCNNode()
+
+        let base = SCNCylinder(radius: 0.026, height: 0.006)
+        base.materials = [makeEntityMaterial(color: entity.swatch, roughness: 0.72)]
+        let baseNode = SCNNode(geometry: base)
+        baseNode.position = SCNVector3(0, 0.003, 0)
+        root.addChildNode(baseNode)
+
+        let mast = SCNBox(width: 0.004, height: 0.034, length: 0.004, chamferRadius: 0.0)
+        mast.materials = [makeEntityMaterial(color: UIColor(white: 0.82, alpha: 1.0), roughness: 0.70)]
+        let mastNode = SCNNode(geometry: mast)
+        mastNode.position = SCNVector3(-0.019, 0.022, -0.018)
+        root.addChildNode(mastNode)
+
+        let label = makeLabel(entity.name, color: .white, scale: 0.0035)
+        label.position = SCNVector3(0, 0.040, 0)
+        root.addChildNode(label)
+        return root
+    }
+
+    private static func makePropNode(for entity: VisualSceneEntity) -> SCNNode {
+        let node = SCNNode(geometry: propGeometry(for: entity.visual))
+        node.geometry?.materials = [makeEntityMaterial(color: entity.swatch, roughness: 0.78)]
+        node.eulerAngles = SCNVector3(0, Float(abs(entity.id.hashValue % 7)) * 0.28, 0)
+        return node
+    }
+
+    private static func makeItemNode(for entity: VisualSceneEntity) -> SCNNode {
+        let node = SCNNode(geometry: itemGeometry(for: entity.visual))
+        node.geometry?.materials = [makeEntityMaterial(color: entity.swatch, roughness: 0.62)]
+
+        if entity.visual.contains("plant") || entity.visual.contains("fruit") || entity.visual.contains("root") || entity.visual.contains("sprig") {
+            let stem = SCNCylinder(radius: 0.0014, height: 0.014)
+            stem.materials = [makeEntityMaterial(color: UIColor(red: 0.24, green: 0.52, blue: 0.25, alpha: 1.0), roughness: 0.80)]
+            let stemNode = SCNNode(geometry: stem)
+            stemNode.position = SCNVector3(0, 0.010, 0)
+            node.addChildNode(stemNode)
+        }
+
+        return node
+    }
+
+    private static func makeTaskMarkerNode(for entity: VisualSceneEntity) -> SCNNode {
+        let root = SCNNode()
+
+        let marker = SCNTorus(ringRadius: 0.009, pipeRadius: 0.0018)
+        marker.materials = [makeEntityMaterial(color: entity.swatch, emission: entity.swatch)]
+        let markerNode = SCNNode(geometry: marker)
+        markerNode.eulerAngles = SCNVector3(Float.pi / 2.0, 0, 0)
+        root.addChildNode(markerNode)
+
+        let label = makeLabel(entity.name, color: entity.swatch, scale: 0.0028)
+        label.position = SCNVector3(0, 0.014, 0)
+        root.addChildNode(label)
+
+        let pulse = SCNAction.sequence([
+            SCNAction.scale(to: 1.18, duration: 0.7),
+            SCNAction.scale(to: 1.0, duration: 0.7)
+        ])
+        markerNode.runAction(SCNAction.repeatForever(pulse))
+        return root
+    }
+
+    private static func makeOutcomeLabelNode(for entity: VisualSceneEntity) -> SCNNode {
+        let label = makeLabel(entity.name, color: entity.swatch, scale: 0.0030)
+        let float = SCNAction.sequence([
+            SCNAction.moveBy(x: 0, y: 0.006, z: 0, duration: 1.1),
+            SCNAction.moveBy(x: 0, y: -0.006, z: 0, duration: 1.1)
+        ])
+        label.runAction(SCNAction.repeatForever(float))
+        return label
+    }
+
+    private static func propGeometry(for visual: String) -> SCNGeometry {
+        if visual.contains("barrel") || visual.contains("bucket") || visual.contains("battery") {
+            return SCNCylinder(radius: 0.007, height: 0.014)
+        }
+        if visual.contains("rifle") || visual.contains("rod") || visual.contains("antenna") {
+            return SCNBox(width: 0.004, height: 0.004, length: 0.030, chamferRadius: 0.0)
+        }
+        if visual.contains("table") || visual.contains("bench") || visual.contains("cot") || visual.contains("bed") {
+            return SCNBox(width: 0.026, height: 0.006, length: 0.015, chamferRadius: 0.0)
+        }
+        if visual.contains("plant") || visual.contains("grow") {
+            return SCNCone(topRadius: 0.002, bottomRadius: 0.010, height: 0.018)
+        }
+        return SCNBox(width: 0.011, height: 0.011, length: 0.011, chamferRadius: 0.001)
+    }
+
+    private static func itemGeometry(for visual: String) -> SCNGeometry {
+        if visual.contains("long_gun") || visual.contains("sidearm") || visual.contains("tool_roll") || visual.contains("soldering") {
+            return SCNBox(width: 0.026, height: 0.0045, length: 0.006, chamferRadius: 0.0)
+        }
+        if visual.contains("water") || visual.contains("filter") || visual.contains("bucket") {
+            return SCNCylinder(radius: 0.0065, height: 0.016)
+        }
+        if visual.contains("fruit") || visual.contains("tomato") || visual.contains("bulb") {
+            return SCNSphere(radius: 0.007)
+        }
+        if visual.contains("root") || visual.contains("chili") || visual.contains("pod") || visual.contains("sprig") {
+            return SCNCapsule(capRadius: 0.0035, height: 0.020)
+        }
+        if visual.contains("planter") || visual.contains("storage") || visual.contains("ammo") || visual.contains("box") {
+            return SCNBox(width: 0.018, height: 0.010, length: 0.013, chamferRadius: 0.001)
+        }
+        return SCNBox(width: 0.011, height: 0.011, length: 0.011, chamferRadius: 0.001)
+    }
+
+    private static func makeSelectionHalo(radius: CGFloat) -> SCNNode {
+        let geometry = SCNTorus(ringRadius: radius, pipeRadius: 0.0015)
+        geometry.materials = [
+            makeEntityMaterial(
+                color: UIColor(red: 1.0, green: 0.88, blue: 0.32, alpha: 1.0),
+                emission: UIColor(red: 1.0, green: 0.68, blue: 0.12, alpha: 1.0)
+            )
+        ]
+
+        let node = SCNNode(geometry: geometry)
+        node.name = selectionHaloName
+        node.eulerAngles = SCNVector3(Float.pi / 2.0, 0, 0)
+        node.position = SCNVector3(0, 0.003, 0)
+        node.isHidden = true
+        return node
+    }
+
+    private static func selectionRadius(for kind: VisualSceneEntityKind) -> CGFloat {
+        switch kind {
+        case .character:
+            return 0.018
+        case .station:
+            return 0.030
+        case .taskMarker:
+            return 0.014
+        case .item, .prop, .outcomeLabel:
+            return 0.015
+        }
+    }
+
+    private static func makeLabel(_ string: String, color: UIColor, scale: Float) -> SCNNode {
+        let text = SCNText(string: string, extrusionDepth: 0.00035)
+        text.font = UIFont.systemFont(ofSize: 8, weight: .semibold)
+        text.flatness = 0.2
+        text.materials = [makeEntityMaterial(color: color, emission: color.withAlphaComponent(0.25))]
+
+        let node = SCNNode(geometry: text)
+        let bounds = text.boundingBox
+        let centerX = (bounds.max.x + bounds.min.x) * 0.5
+        node.pivot = SCNMatrix4MakeTranslation(centerX, bounds.min.y, 0)
+        node.scale = SCNVector3(scale, scale, scale)
+
+        let billboard = SCNBillboardConstraint()
+        billboard.freeAxes = .all
+        node.constraints = [billboard]
+        return node
+    }
+
+    private static func makeEntityMaterial(
+        color: UIColor,
+        roughness: CGFloat = 0.66,
+        emission: UIColor? = nil
+    ) -> SCNMaterial {
+        let material = SCNMaterial()
+        material.lightingModel = .physicallyBased
+        material.diffuse.contents = color
+        material.roughness.contents = roughness
+        material.metalness.contents = 0.0
+        material.emission.contents = emission ?? UIColor.clear
+        material.isDoubleSided = true
+        return material
     }
 
     @available(*, deprecated, message: "Use setRenderMode(_:showGrid:in:) instead.")
