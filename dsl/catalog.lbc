@@ -358,9 +358,11 @@ itemdef "Projector screen" { tags: ["catalog"]; }
 itemdef "Soil" { tags: ["catalog"]; }
 itemdef "Plant" { tags: ["catalog"]; }
 itemdef "Tomato" { tags: ["catalog"]; }
+itemdef "Carrot" { tags: ["catalog"]; }
 itemdef "Green bean" { tags: ["catalog"]; }
 itemdef "Chili" { tags: ["catalog"]; }
 itemdef "Garlic" { tags: ["catalog"]; }
+itemdef "Basil" { tags: ["catalog"]; }
 itemdef "Ramen" { tags: ["catalog"]; }
 itemdef "Canned spam" { tags: ["catalog"]; }
 itemdef "Canned tomato" { tags: ["catalog"]; }

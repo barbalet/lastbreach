@@ -4,6 +4,7 @@ import SceneKit
 struct ContentView: View {
     @State private var removeEnvironment = false
     @State private var showGrid = true
+    @State private var visualCatalog = VisualCatalog.loadBundled()
     @State private var scene = VoxelSceneFactory.makeScene(size: 7, interfacesOnly: false)
 
     var body: some View {

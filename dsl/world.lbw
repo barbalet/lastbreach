@@ -36,6 +36,8 @@ world "Default Shelter - Coastal Edge" {
     "Plant": qty 1, cond 80;
     "Watering can": qty 1, cond 75;
     "Tomato": qty 1;
+    "Carrot": qty 0;
+    "Basil": qty 0;
 
     "Books": qty 2;
     "Food storage containers": qty 3;

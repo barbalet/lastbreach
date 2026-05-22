@@ -43,6 +43,7 @@ The current prototype content lives in:
 
 - `data/tasks.txt`: available activities to schedule/resolve.
 - `data/items.txt`: world objects, tools, resources, and equipment.
+- `dsl/visual_catalog.json`: visual station, item, and task metadata used by the iOS client.
 
 These files are intended to seed balancing and simulation rules.
 
@@ -53,21 +54,43 @@ These files are intended to seed balancing and simulation rules.
 - Support item dependencies for specialized tasks (for example: fishing needs bait/hooks/fish handling gear; electronics work needs tools like multimeter and soldering iron).
 - Add progression via improved routines, tool quality, and shelter upgrades.
 
-## Runner
+## Build and Run
 
-I’ll package a standalone C99 runner (no third-party libs) that parses .lbp plans and optionally .lbc (catalog) + .lbw (world), then runs a tick/day simulation printing time-cycle and event output (e.g., breaches, overnight checks, task starts/completions, station conflicts).
+### Mac simulation runner
 
-### Build
+`lastbreach-mac` contains the standalone C99 simulation runner and test harness.
 
-``make``
+```sh
+cd lastbreach-mac/lastbreach-mac
+make
+make test
+```
 
-### Run
+Run the bundled DSL scenario from the runner directory:
 
-``./lastbreach joel.lbp mara.lbp --days 3 --seed 123``
+```sh
+./lastbreach ../../dsl/joel.lbp ../../dsl/mara.lbp --world ../../dsl/world.lbw --catalog ../../dsl/catalog.lbc --days 3 --seed 123
+```
 
-### Optional inputs:
+Emit machine-readable JSON lines for tools or the future iOS bridge:
 
-``./lastbreach joel.lbp mara.lbp --world world.lbw --catalog catalog.lbc --days 2``
+```sh
+./lastbreach ../../dsl/joel.lbp ../../dsl/mara.lbp --world ../../dsl/world.lbw --catalog ../../dsl/catalog.lbc --days 3 --seed 123 --json
+```
+
+### iOS visual app
+
+`lastbreach-ios` contains the SwiftUI/SceneKit iOS app.
+
+The app bundles `dsl/visual_catalog.json` and decodes it at launch so SceneKit/UI code can map simulation task and item names to visual stations, props, poses, and output effects.
+
+Open `lastbreach-ios/lastbreach-ios.xcodeproj` in Xcode, select the `lastbreach-ios` scheme, choose an iPhone or iPad simulator, and run the app.
+
+Command-line build check:
+
+```sh
+xcodebuild -project lastbreach-ios/lastbreach-ios.xcodeproj -scheme lastbreach-ios -destination 'generic/platform=iOS Simulator' build
+```
 
 ### Output you’ll see
 

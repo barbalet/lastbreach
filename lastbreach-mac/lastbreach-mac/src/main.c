@@ -11,10 +11,11 @@
 
 static void usage(void) {
     fprintf(stderr,
-            "usage: lastbreach <a.lbp> <b.lbp> [--days N] [--seed N] [--world file.lbw] [--catalog file.lbc]\n"
+            "usage: lastbreach <a.lbp> <b.lbp> [--days N] [--seed N] [--world file.lbw] [--catalog file.lbc] [--json]\n"
             "notes:\n"
             "  - if --world omitted and ./world.lbw exists, it will be loaded\n"
             "  - if --catalog omitted and ./catalog.lbc exists, it will be loaded\n"
+            "  - --json emits one JSON object per line for clients/tools\n"
            );
     exit(2);
 }
@@ -27,6 +28,7 @@ int main(int argc, char **argv) {
     const char *world_path = NULL;
     const char *catalog_path = NULL;
     int days = 1;
+    int json_output = 0;
     unsigned int seed = (unsigned int)time(NULL);
     for (int i = 3; i<argc; i++) {
         if (strcmp(argv[i], "--days")==0 && i+1<argc) {
@@ -45,6 +47,10 @@ int main(int argc, char **argv) {
             catalog_path = argv[++i];
             continue;
         }
+        if (strcmp(argv[i], "--json")==0) {
+            json_output = 1;
+            continue;
+        }
         usage();
     }
     srand(seed);
@@ -61,14 +67,14 @@ int main(int argc, char **argv) {
         if (!src) dief("failed to read catalog file: %s", catalog_path);
         parse_catalog(&cat, catalog_path, src);
         free(src);
-        printf("Loaded catalog: %s\n", catalog_path);
+        if (!json_output) printf("Loaded catalog: %s\n", catalog_path);
     }
     if (world_path) {
         char *src = read_entire_file(world_path);
         if (!src) dief("failed to read world file: %s", world_path);
         parse_world(&world, world_path, src);
         free(src);
-        printf("Loaded world: %s\n", world_path);
+        if (!json_output) printf("Loaded world: %s\n", world_path);
     }
     char *a_src = read_entire_file(a_path);
     char *b_src = read_entire_file(b_path);
@@ -86,9 +92,17 @@ int main(int argc, char **argv) {
     Character A, B;
     parse_character(&pa, &A);
     parse_character(&pb, &B);
-    printf("Loaded characters: %s and %s\n", A.name, B.name);
-    printf("Seed=%u days=%d\n", seed, days);
-    run_sim(&world, &cat, &A, &B, days);
+    if (!json_output) {
+        printf("Loaded characters: %s and %s\n", A.name, B.name);
+        printf("Seed=%u days=%d\n", seed, days);
+        run_sim(&world, &cat, &A, &B, days);
+    } else {
+        SimOptions options;
+        options.mode = LB_SIM_OUTPUT_JSONL;
+        options.out = stdout;
+        options.seed = seed;
+        run_sim_with_options(&world, &cat, &A, &B, days, &options);
+    }
     free(a_src);
     free(b_src);
     return 0;

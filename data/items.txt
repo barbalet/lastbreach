@@ -90,9 +90,11 @@ Soil
 Seeds
 Plant
 Tomato
+Carrot
 Green bean
 Chili
 Garlic
+Basil
 Ramen
 Canned spam
 Canned tomato

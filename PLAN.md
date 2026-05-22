@@ -9,7 +9,7 @@ The conclusion of these cycles is a playable iOS shelter simulation where the pl
 ## Current Project Shape
 
 - `lastbreach-mac` contains the C99 simulation runner and DSL parser. It currently reads `.lbp`, `.lbw`, and `.lbc` files, runs a tick-based shelter simulation, and prints task/event output.
-- `environmentVis` contains the current iOS/SceneKit visual prototype. It should be renamed to `lastbreach-ios` as part of the first implementation cycle.
+- `lastbreach-ios` contains the current iOS/SceneKit visual prototype and is the target iOS game app.
 - `dsl` contains the game DSL files:
   - `dsl/world.lbw`: shelter state, inventory, weather, and events.
   - `dsl/catalog.lbc`: item and task definitions.
@@ -78,11 +78,13 @@ Recommended structure:
 
 ## Cycle 1: Project Identity and Baseline
 
+Status: complete.
+
 Goal: make the workspace names and build targets line up with the intended product.
 
 Work:
 
-- Rename `environmentVis` to `lastbreach-ios`.
+- Rename the iOS visual prototype to `lastbreach-ios`.
 - Rename the Xcode project, target, app struct, display name, bundle identifier, bridging header path, and source folder references as needed.
 - Preserve current SceneKit behavior after the rename.
 - Document how to build and run both apps from a fresh checkout.
@@ -91,11 +93,13 @@ Work:
 Done when:
 
 - `lastbreach-ios` exists as the iOS app folder.
-- No user-facing app name still says `environmentVis`.
+- No user-facing app name still uses the old prototype name.
 - The iOS app launches and shows the existing voxel scene with the two avatars.
 - The Mac runner and tests still build.
 
 ## Cycle 2: Shared State and Event Contract
+
+Status: complete.
 
 Goal: give the iOS app reliable data from the simulation.
 
@@ -113,7 +117,48 @@ Done when:
 - Tests prove that key events can be parsed: watering, hydroponics maintenance, harvest, gunsmithing, breach defense, eating, and sleeping.
 - The event contract is documented in this file or a linked schema file.
 
+## JSONL Event Contract
+
+The Mac runner supports a client stream with `--json`. Each line is one complete JSON object. Human-readable preamble lines are suppressed in this mode, so consumers can parse stdout line by line.
+
+Command:
+
+```sh
+./lastbreach ../../dsl/joel.lbp ../../dsl/mara.lbp --world ../../dsl/world.lbw --catalog ../../dsl/catalog.lbc --days 3 --seed 123 --json
+```
+
+Common fields:
+
+- `type`: event type string.
+- `day`: zero-based day index when applicable.
+- `tick`: zero-based tick within the day when applicable.
+- Stable identifiers use lower snake case in `*_id` fields, with display names preserved in adjacent fields.
+
+State payloads:
+
+- `world`: shelter stats plus hydroponics and cooked-food state.
+- `characters`: character id/name, needs, injury/illness, defense posture, active task, station, remaining ticks, and priority.
+- `inventory`: item id/name, quantity, and best known condition.
+
+Event types:
+
+- `run_start`: schema version, day count, seed, and participating characters.
+- `initial_state`: state before the first simulated tick.
+- `day_start`: day-level world summary and breach chance.
+- `task_started`: character, task, station, duration ticks, and priority.
+- `task_completed`: character, task, station, and priority at completion.
+- `inventory_changed`: item quantity/condition before and after a task or overnight world update.
+- `breach`: breach tick and level.
+- `breach_impact`: whether the breach was defended and structure before/after.
+- `overnight_threat_check`: overnight roll, chance, and contact result.
+- `harvest`: hydroponics harvest source plus produced item quantities.
+- `tick_snapshot`: complete state after each tick resolves.
+- `final_state`: complete state after the requested run.
+- `simulation_complete`: final sentinel for stream consumers.
+
 ## Cycle 3: Visual Metadata for DSL Content
+
+Status: complete.
 
 Goal: connect simulation nouns to visible game objects.
 
@@ -144,6 +189,15 @@ Done when:
 - Every first-playable task has a station and visual mapping.
 - Tomatoes, carrots, chilis, and basil exist as harvestable/cookable items.
 - The iOS app can load or compile a visual catalog without hardcoding every task name in view code.
+
+Implemented catalog:
+
+- `dsl/visual_catalog.json` is the companion visual metadata file used by the iOS app.
+- `stations` maps station ids to display names, scene roles, anchors, palette hints, and prop ids.
+- `items` maps inventory/content ids to display names, visual ids, categories, scale hints, and station affinities.
+- `tasks` maps every first-playable task name from `data/tasks.txt` to a station id, action pose, hand prop, target prop, output ids, and sound/effect hints.
+- The iOS project bundles this JSON resource and decodes it through `VisualCatalog.swift`.
+- Produce now includes harvestable and cookable `Tomato`, `Carrot`, `Green bean`, `Chili`, `Garlic`, and `Basil`.
 
 ## Cycle 4: iOS Scene Entity System
 

@@ -401,6 +401,18 @@ void seed_default_catalog(Catalog *cat);
 /* Simulation                                                                     */
 /* -------------------------------------------------------------------------- */
 
+typedef enum {
+    LB_SIM_OUTPUT_TEXT = 0,
+    LB_SIM_OUTPUT_JSONL = 1
+} SimOutputMode;
+
+typedef struct {
+    SimOutputMode mode;
+    FILE *out;
+    unsigned int seed;
+} SimOptions;
+
 void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days);
+void run_sim_with_options(World *w, Catalog *cat, Character *A, Character *B, int days, const SimOptions *options);
 
 #endif /* LASTBREACH_H */

@@ -100,12 +100,360 @@ static const TaskDelta kTaskDeltas[] = {
     {"Water filtration", 0, 0, 0, 0, 0, 0, -0.2, 2.0, -2.0, 0, -1.0, 0}
 };
 
-static const char *kPlantProduce[] = {
+enum { PLANT_PRODUCE_COUNT = 6 };
+
+static const char *kPlantProduce[PLANT_PRODUCE_COUNT] = {
     "Tomato",
+    "Carrot",
     "Green bean",
     "Chili",
-    "Garlic"
+    "Garlic",
+    "Basil"
 };
+
+typedef struct {
+    int json;
+    FILE *out;
+    unsigned int seed;
+} SimLog;
+
+typedef struct {
+    char *key;
+    double qty;
+    double cond;
+} InvSnapshotEntry;
+
+typedef struct {
+    InvSnapshotEntry *items;
+    int n;
+    int cap;
+} InvSnapshot;
+
+static FILE *sim_stream(SimLog *log) {
+    return (log && log->out) ? log->out : stdout;
+}
+
+static void sim_textf(SimLog *log, const char *fmt, ...) {
+    va_list ap;
+    if (log && log->json) return;
+    va_start(ap, fmt);
+    vfprintf(sim_stream(log), fmt, ap);
+    va_end(ap);
+}
+
+static void json_write_string(FILE *out, const char *s) {
+    fputc('"', out);
+    if (s) {
+        const unsigned char *p = (const unsigned char *)s;
+        while (*p) {
+            unsigned char c = *p++;
+            switch (c) {
+            case '"': fputs("\\\"", out); break;
+            case '\\': fputs("\\\\", out); break;
+            case '\b': fputs("\\b", out); break;
+            case '\f': fputs("\\f", out); break;
+            case '\n': fputs("\\n", out); break;
+            case '\r': fputs("\\r", out); break;
+            case '\t': fputs("\\t", out); break;
+            default:
+                if (c < 0x20) fprintf(out, "\\u%04x", c);
+                else fputc((int)c, out);
+                break;
+            }
+        }
+    }
+    fputc('"', out);
+}
+
+static void json_write_id(FILE *out, const char *s) {
+    int wrote = 0;
+    int last_sep = 0;
+    fputc('"', out);
+    if (s) {
+        const unsigned char *p = (const unsigned char *)s;
+        while (*p) {
+            unsigned char c = *p++;
+            if (isalnum(c)) {
+                fputc((int)tolower(c), out);
+                wrote = 1;
+                last_sep = 0;
+            } else if (!last_sep && wrote) {
+                fputc('_', out);
+                last_sep = 1;
+            }
+        }
+    }
+    if (!wrote) fputs("unknown", out);
+    fputc('"', out);
+}
+
+static void json_write_nullable_string(FILE *out, const char *s) {
+    if (s) json_write_string(out, s);
+    else fputs("null", out);
+}
+
+static void json_write_nullable_id(FILE *out, const char *s) {
+    if (s) json_write_id(out, s);
+    else fputs("null", out);
+}
+
+static void inv_snapshot_init(InvSnapshot *snap) {
+    snap->items = NULL;
+    snap->n = 0;
+    snap->cap = 0;
+}
+
+static void inv_snapshot_free(InvSnapshot *snap) {
+    for (int i = 0; i<snap->n; i++) free(snap->items[i].key);
+    free(snap->items);
+    inv_snapshot_init(snap);
+}
+
+static void inv_snapshot_push(InvSnapshot *snap, const char *key, double qty, double cond) {
+    if (snap->n == snap->cap) {
+        snap->cap = snap->cap ? snap->cap*2 : 8;
+        snap->items = xrealloc(snap->items, (size_t)snap->cap * sizeof(*snap->items));
+    }
+    snap->items[snap->n].key = xstrdup(key);
+    snap->items[snap->n].qty = qty;
+    snap->items[snap->n].cond = cond;
+    snap->n++;
+}
+
+static void inv_snapshot_capture(InvSnapshot *snap, Inventory *inv) {
+    inv_snapshot_init(snap);
+    for (int i = 0; i<inv->items.n; i++) {
+        inv_snapshot_push(snap, inv->items.v[i].key, inv->items.v[i].qty, inv->items.v[i].best_cond);
+    }
+}
+
+static InvSnapshotEntry *inv_snapshot_find(InvSnapshot *snap, const char *key) {
+    for (int i = 0; i<snap->n; i++) {
+        if (strcmp(snap->items[i].key, key)==0) return &snap->items[i];
+    }
+    return NULL;
+}
+
+static int doubles_differ(double a, double b) {
+    double d = a - b;
+    return d > 0.000001 || d < -0.000001;
+}
+
+static void json_emit_world(FILE *out, World *w) {
+    fprintf(out,
+            "{\"temp_c\":%.3f,\"signature\":%.3f,\"power\":%.3f,\"water_safe\":%.3f,"
+            "\"water_raw\":%.3f,\"structure\":%.3f,\"contamination\":%.3f,"
+            "\"hydroponic_health\":%.3f,\"plants_watered_today\":%d,"
+            "\"hydroponics_maintained_today\":%d,\"cooked_food_portions\":%.3f}",
+            w->shelter.temp_c,
+            w->shelter.signature,
+            w->shelter.power,
+            w->shelter.water_safe,
+            w->shelter.water_raw,
+            w->shelter.structure,
+            w->shelter.contamination,
+            w->hydroponic_health,
+            w->plants_watered_today,
+            w->hydroponics_maintained_today,
+            w->cooked_food_portions);
+}
+
+static void json_emit_inventory(FILE *out, Inventory *inv) {
+    fputc('[', out);
+    for (int i = 0; i<inv->items.n; i++) {
+        ItemEntry *e = &inv->items.v[i];
+        if (i) fputc(',', out);
+        fputs("{\"item_id\":", out);
+        json_write_id(out, e->key);
+        fputs(",\"item\":", out);
+        json_write_string(out, e->key);
+        fprintf(out, ",\"qty\":%.3f,\"condition\":%.3f}", e->qty, e->best_cond);
+    }
+    fputc(']', out);
+}
+
+static void json_emit_character(FILE *out, Character *ch) {
+    fputs("{\"character_id\":", out);
+    json_write_id(out, ch->name);
+    fputs(",\"character\":", out);
+    json_write_string(out, ch->name);
+    fprintf(out,
+            ",\"hunger\":%.3f,\"hydration\":%.3f,\"fatigue\":%.3f,"
+            "\"morale\":%.3f,\"injury\":%.3f,\"illness\":%.3f,"
+            "\"defense_posture\":",
+            ch->hunger,
+            ch->hydration,
+            ch->fatigue,
+            ch->morale,
+            ch->injury,
+            ch->illness);
+    json_write_nullable_string(out, ch->defense_posture);
+    fputs(",\"active_task\":", out);
+    json_write_nullable_string(out, ch->rt_task);
+    fputs(",\"active_task_id\":", out);
+    json_write_nullable_id(out, ch->rt_task);
+    fputs(",\"station\":", out);
+    json_write_nullable_string(out, ch->rt_station);
+    fputs(",\"station_id\":", out);
+    json_write_nullable_id(out, ch->rt_station);
+    fprintf(out, ",\"remaining_ticks\":%d,\"priority\":%.3f}", ch->rt_remaining, ch->rt_priority);
+}
+
+static void json_emit_state(SimLog *log, const char *type, int day, int tick, World *w, Character *A, Character *B) {
+    FILE *out = sim_stream(log);
+    if (!log || !log->json) return;
+    fputs("{\"type\":", out);
+    json_write_string(out, type);
+    fprintf(out, ",\"day\":%d,\"tick\":%d,\"world\":", day, tick);
+    json_emit_world(out, w);
+    fputs(",\"characters\":[", out);
+    json_emit_character(out, A);
+    fputc(',', out);
+    json_emit_character(out, B);
+    fputs("],\"inventory\":", out);
+    json_emit_inventory(out, &w->inv);
+    fputs("}\n", out);
+}
+
+static void json_emit_run_start(SimLog *log, int days, Character *A, Character *B) {
+    FILE *out = sim_stream(log);
+    if (!log || !log->json) return;
+    fprintf(out, "{\"type\":\"run_start\",\"schema_version\":1,\"days\":%d,\"seed\":%u,\"characters\":[", days, log->seed);
+    json_emit_character(out, A);
+    fputc(',', out);
+    json_emit_character(out, B);
+    fputs("]}\n", out);
+}
+
+static void json_emit_day_start(SimLog *log, int day, World *w) {
+    FILE *out = sim_stream(log);
+    if (!log || !log->json) return;
+    fprintf(out, "{\"type\":\"day_start\",\"day\":%d,\"breach_chance\":%.3f,\"world\":", day, w->events.breach_chance);
+    json_emit_world(out, w);
+    fputs("}\n", out);
+}
+
+static void json_emit_task_event(SimLog *log, const char *type, int day, int tick, Character *ch, const char *task, const char *station, int ticks, double priority) {
+    FILE *out = sim_stream(log);
+    if (!log || !log->json) return;
+    fputs("{\"type\":", out);
+    json_write_string(out, type);
+    fprintf(out, ",\"day\":%d,\"tick\":%d,\"character_id\":", day, tick);
+    json_write_id(out, ch->name);
+    fputs(",\"character\":", out);
+    json_write_string(out, ch->name);
+    fputs(",\"task_id\":", out);
+    json_write_id(out, task);
+    fputs(",\"task\":", out);
+    json_write_string(out, task);
+    fputs(",\"station_id\":", out);
+    json_write_nullable_id(out, station);
+    fputs(",\"station\":", out);
+    json_write_nullable_string(out, station);
+    fprintf(out, ",\"ticks\":%d,\"priority\":%.3f}\n", ticks, priority);
+}
+
+static void json_emit_inventory_change(SimLog *log, int day, int tick, const char *cause, Character *ch, const char *task, const char *item, double before_qty, double after_qty, double before_cond, double after_cond) {
+    FILE *out = sim_stream(log);
+    if (!log || !log->json) return;
+    fprintf(out, "{\"type\":\"inventory_changed\",\"day\":%d,\"tick\":%d,\"cause\":", day, tick);
+    json_write_string(out, cause);
+    fputs(",\"character_id\":", out);
+    json_write_id(out, ch ? ch->name : "world");
+    fputs(",\"character\":", out);
+    json_write_nullable_string(out, ch ? ch->name : NULL);
+    fputs(",\"task_id\":", out);
+    json_write_nullable_id(out, task);
+    fputs(",\"task\":", out);
+    json_write_nullable_string(out, task);
+    fputs(",\"item_id\":", out);
+    json_write_id(out, item);
+    fputs(",\"item\":", out);
+    json_write_string(out, item);
+    fprintf(out,
+            ",\"qty_before\":%.3f,\"qty_after\":%.3f,\"delta\":%.3f,"
+            "\"condition_before\":%.3f,\"condition_after\":%.3f}\n",
+            before_qty,
+            after_qty,
+            after_qty - before_qty,
+            before_cond,
+            after_cond);
+}
+
+static void json_emit_inventory_changes(SimLog *log, int day, int tick, const char *cause, Character *ch, const char *task, InvSnapshot *before, World *w) {
+    if (!log || !log->json) return;
+    for (int i = 0; i<before->n; i++) {
+        InvSnapshotEntry *old = &before->items[i];
+        ItemEntry *now = inv_find(&w->inv, old->key);
+        double now_qty = now ? now->qty : 0.0;
+        double now_cond = now ? now->best_cond : 0.0;
+        if (doubles_differ(old->qty, now_qty) || doubles_differ(old->cond, now_cond)) {
+            json_emit_inventory_change(log, day, tick, cause, ch, task, old->key, old->qty, now_qty, old->cond, now_cond);
+        }
+    }
+    for (int i = 0; i<w->inv.items.n; i++) {
+        ItemEntry *now = &w->inv.items.v[i];
+        if (!inv_snapshot_find(before, now->key)) {
+            json_emit_inventory_change(log, day, tick, cause, ch, task, now->key, 0.0, now->qty, 0.0, now->best_cond);
+        }
+    }
+}
+
+static void json_emit_breach(SimLog *log, int day, int tick, int level) {
+    FILE *out = sim_stream(log);
+    if (!log || !log->json) return;
+    fprintf(out, "{\"type\":\"breach\",\"day\":%d,\"tick\":%d,\"level\":%d}\n", day, tick, level);
+}
+
+static void json_emit_breach_impact(SimLog *log, int day, int tick, int level, int defended, double before_structure, double after_structure) {
+    FILE *out = sim_stream(log);
+    if (!log || !log->json) return;
+    fprintf(out,
+            "{\"type\":\"breach_impact\",\"day\":%d,\"tick\":%d,\"level\":%d,"
+            "\"defended\":%s,\"structure_before\":%.3f,\"structure_after\":%.3f,"
+            "\"structure_delta\":%.3f}\n",
+            day,
+            tick,
+            level,
+            defended ? "true" : "false",
+            before_structure,
+            after_structure,
+            after_structure - before_structure);
+}
+
+static void json_emit_overnight_check(SimLog *log, int day, int tick, int roll, double chance, int contact) {
+    FILE *out = sim_stream(log);
+    if (!log || !log->json) return;
+    fprintf(out,
+            "{\"type\":\"overnight_threat_check\",\"day\":%d,\"tick\":%d,"
+            "\"roll\":%d,\"chance\":%.3f,\"contact\":%s}\n",
+            day,
+            tick,
+            roll,
+            chance,
+            contact ? "true" : "false");
+}
+
+static void json_emit_harvest(SimLog *log, int day, int tick, World *w, int *produce_counts, int ncounts) {
+    FILE *out = sim_stream(log);
+    int emitted = 0;
+    if (!log || !log->json) return;
+    fprintf(out, "{\"type\":\"harvest\",\"day\":%d,\"tick\":%d,\"source\":\"hydroponics\",\"hydroponic_health\":%.3f,\"items\":[",
+            day,
+            tick,
+            w->hydroponic_health);
+    for (int i = 0; i<ncounts; i++) {
+        if (produce_counts[i] <= 0) continue;
+        if (emitted) fputc(',', out);
+        fputs("{\"item_id\":", out);
+        json_write_id(out, kPlantProduce[i]);
+        fputs(",\"item\":", out);
+        json_write_string(out, kPlantProduce[i]);
+        fprintf(out, ",\"qty\":%d}", produce_counts[i]);
+        emitted = 1;
+    }
+    fputs("]}\n", out);
+}
 
 static void diag_init(AgentDiagnostics *d) {
     memset(d, 0, sizeof(*d));
@@ -235,9 +583,11 @@ static double edible_stock(World *w) {
     return inv_stock(&w->inv, "Food")
            + inv_stock(&w->inv, "Fish")
            + inv_stock(&w->inv, "Tomato")
+           + inv_stock(&w->inv, "Carrot")
            + inv_stock(&w->inv, "Green bean")
            + inv_stock(&w->inv, "Chili")
            + inv_stock(&w->inv, "Garlic")
+           + inv_stock(&w->inv, "Basil")
            + inv_stock(&w->inv, "Ramen")
            + inv_stock(&w->inv, "Canned spam")
            + inv_stock(&w->inv, "Canned tomato")
@@ -494,9 +844,11 @@ static int consume_meal(World *w, double *hunger_gain, double *hydration_gain) {
         {"Food", 1.0, 12.0, 5.0},
         {"Fish", 1.0, 10.0, 2.0},
         {"Tomato", 1.0, 5.0, 2.0},
+        {"Carrot", 1.0, 4.0, 1.0},
         {"Green bean", 1.0, 4.0, 1.0},
         {"Chili", 0.5, 2.0, 0.0},
         {"Garlic", 0.5, 1.5, 0.0},
+        {"Basil", 0.25, 1.0, 0.0},
         {"Ramen", 1.0, 8.0, -1.0},
         {"Canned spam", 1.0, 9.0, -0.5},
         {"Canned tomato", 1.0, 6.0, 1.0},
@@ -549,7 +901,7 @@ static void apply_task_delta(World *w, Character *ch, const TaskDelta *d) {
     w->shelter.signature += d->signature;
 }
 
-static void overnight_plant_tick(World *w) {
+static void overnight_plant_tick(World *w, SimLog *log, int day, int tick) {
     /*
      * Nightly hydroponics pass:
      * 1) update hydroponic health from actions/environment
@@ -576,7 +928,7 @@ static void overnight_plant_tick(World *w) {
         if (inv_consume(&w->inv, "Seeds", 0.2) > 0.0 && inv_consume(&w->inv, "Soil", 0.1) > 0.0) {
             inv_add(&w->inv, "Plant", 0.6, 100.0);
             plants = inv_stock(&w->inv, "Plant");
-            printf("    hydroponics: seeds germinated into starter plants\n");
+            sim_textf(log, "    hydroponics: seeds germinated into starter plants\n");
         }
     }
 
@@ -592,13 +944,13 @@ static void overnight_plant_tick(World *w) {
         if (attempts < 1) attempts = 1;
         if (attempts > 5) attempts = 5;
 
-        int produce_counts[4] = {0, 0, 0, 0};
+        int produce_counts[PLANT_PRODUCE_COUNT] = {0};
         int harvests = 0;
         for (int i = 0; i<attempts; i++) {
             int chance = (int)(w->hydroponic_health*0.6 + plants*12.0);
             if (chance > 90) chance = 90;
             if (rand_percent() < chance) {
-                int kind = rand()%4;
+                int kind = rand()%PLANT_PRODUCE_COUNT;
                 inv_add(&w->inv, kPlantProduce[kind], 1.0, 95.0);
                 inv_consume(&w->inv, "Plant", 0.12);
                 produce_counts[kind]++;
@@ -607,11 +959,12 @@ static void overnight_plant_tick(World *w) {
         }
 
         if (harvests > 0) {
-            printf("    hydroponics harvest:");
-            for (int i = 0; i<4; i++) {
-                if (produce_counts[i] > 0) printf(" %s x%d", kPlantProduce[i], produce_counts[i]);
+            sim_textf(log, "    hydroponics harvest:");
+            for (int i = 0; i<PLANT_PRODUCE_COUNT; i++) {
+                if (produce_counts[i] > 0) sim_textf(log, " %s x%d", kPlantProduce[i], produce_counts[i]);
             }
-            printf("\n");
+            sim_textf(log, "\n");
+            json_emit_harvest(log, day, tick, w, produce_counts, PLANT_PRODUCE_COUNT);
         }
     }
 
@@ -653,7 +1006,7 @@ static void fatigue_tick(Character *ch) {
     clamp01_100(&ch->fatigue);
 }
 
-static void apply_task_effects(World *w, Character *ch, const char *task) {
+static void apply_task_effects(World *w, Character *ch, const char *task, SimLog *log) {
     /* fatigue is handled per-tick in fatigue_tick() */
     const TaskDelta *d = find_task_delta(task);
     apply_task_delta(w, ch, d);
@@ -676,9 +1029,11 @@ static void apply_task_effects(World *w, Character *ch, const char *task) {
         double meal_parts = 0.0;
         meal_parts += inv_consume(&w->inv, "Fish", 0.5)*1.2;
         meal_parts += inv_consume(&w->inv, "Tomato", 0.5);
+        meal_parts += inv_consume(&w->inv, "Carrot", 0.5);
         meal_parts += inv_consume(&w->inv, "Green bean", 0.5);
         meal_parts += inv_consume(&w->inv, "Chili", 0.25);
         meal_parts += inv_consume(&w->inv, "Garlic", 0.25);
+        meal_parts += inv_consume(&w->inv, "Basil", 0.2);
         if (meal_parts > 0.0) {
             inv_add(&w->inv, "Food", meal_parts, 100.0);
             w->cooked_food_portions += meal_parts;
@@ -706,7 +1061,7 @@ static void apply_task_effects(World *w, Character *ch, const char *task) {
         if (has_planter && water_used > 0.0 && inv_consume(&w->inv, "Seeds", 0.3) > 0.0 && inv_consume(&w->inv, "Soil", 0.2) > 0.0) {
             inv_add(&w->inv, "Plant", 1.0, 100.0);
             w->hydroponic_health += 6.0;
-            printf("    gardening: planted seeds (Plant +1.0)\n");
+            sim_textf(log, "    gardening: planted seeds (Plant +1.0)\n");
         }
     } else if (strcmp(task, "Watering plants")==0) {
         double used = consume_world_water(w, 1.0);
@@ -785,15 +1140,24 @@ static void apply_task_effects(World *w, Character *ch, const char *task) {
     clamp_world(w);
 }
 
-static void print_status(Character *ch) {
-    printf("    %s stats: hunger=%.0f hyd=%.0f fatigue=%.0f morale=%.0f injury=%.0f illness=%.0f posture=%s\n",
-           ch->name, ch->hunger, ch->hydration, ch->fatigue, ch->morale, ch->injury, ch->illness, ch->defense_posture);
+static void print_status(SimLog *log, Character *ch) {
+    sim_textf(log, "    %s stats: hunger=%.0f hyd=%.0f fatigue=%.0f morale=%.0f injury=%.0f illness=%.0f posture=%s\n",
+              ch->name, ch->hunger, ch->hydration, ch->fatigue, ch->morale, ch->injury, ch->illness, ch->defense_posture);
 }
 
-void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
+void run_sim_with_options(World *w, Catalog *cat, Character *A, Character *B, int days, const SimOptions *options) {
     AgentDiagnostics da, db;
+    SimLog log;
+
+    log.json = options && options->mode == LB_SIM_OUTPUT_JSONL;
+    log.out = (options && options->out) ? options->out : stdout;
+    log.seed = options ? options->seed : 0;
+
     diag_init(&da);
     diag_init(&db);
+
+    json_emit_run_start(&log, days, A, B);
+    json_emit_state(&log, "initial_state", 0, 0, w, A, B);
 
     for (int day = 0; day<days; day++) {
         DayEvents ev;
@@ -801,27 +1165,31 @@ void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
         w->plants_watered_today = 0;
         w->hydroponics_maintained_today = 0;
 
-        printf("\n=== DAY %d === shelter(structure=%.0f temp=%.1f power=%.0f sig=%.0f water_safe=%.0f hydro=%.0f plants=%.1f cooked=%.1f) breach_chance=%.0f%%\n",
-               day,
-               w->shelter.structure,
-               w->shelter.temp_c,
-               w->shelter.power,
-               w->shelter.signature,
-               w->shelter.water_safe,
-               w->hydroponic_health,
-               inv_stock(&w->inv, "Plant"),
-               w->cooked_food_portions,
-               w->events.breach_chance);
+        sim_textf(&log, "\n=== DAY %d === shelter(structure=%.0f temp=%.1f power=%.0f sig=%.0f water_safe=%.0f hydro=%.0f plants=%.1f cooked=%.1f) breach_chance=%.0f%%\n",
+                  day,
+                  w->shelter.structure,
+                  w->shelter.temp_c,
+                  w->shelter.power,
+                  w->shelter.signature,
+                  w->shelter.water_safe,
+                  w->hydroponic_health,
+                  inv_stock(&w->inv, "Plant"),
+                  w->cooked_food_portions,
+                  w->events.breach_chance);
+        json_emit_day_start(&log, day, w);
 
         for (int tick = 0; tick<DAY_TICKS; tick++) {
             int ev_breach = (ev.breach_tick==tick);
             int breach_level = ev_breach?ev.breach_level:0;
             int ev_overnight = (tick==DAY_TICKS-1);
 
-            printf("\n  [day %d tick %02d] ", day, tick);
-            if (ev_breach) printf("EVENT: BREACH level=%d! ", breach_level);
-            if (ev_overnight) printf("EVENT: overnight_threat_check ");
-            printf("\n");
+            sim_textf(&log, "\n  [day %d tick %02d] ", day, tick);
+            if (ev_breach) {
+                sim_textf(&log, "EVENT: BREACH level=%d! ", breach_level);
+                json_emit_breach(&log, day, tick, breach_level);
+            }
+            if (ev_overnight) sim_textf(&log, "EVENT: overnight_threat_check ");
+            sim_textf(&log, "\n");
 
             /* Phase 1: passive per-tick decay/fatigue updates. */
             tick_decay(A);
@@ -833,9 +1201,15 @@ void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
             if (A->rt_remaining>0) {
                 A->rt_remaining--;
                 if (A->rt_remaining==0 && A->rt_task) {
-                    printf("    %s completed: %s\n", A->name, A->rt_task);
+                    const char *completed_task = A->rt_task;
+                    InvSnapshot before;
+                    inv_snapshot_capture(&before, &w->inv);
+                    sim_textf(&log, "    %s completed: %s\n", A->name, completed_task);
+                    json_emit_task_event(&log, "task_completed", day, tick, A, completed_task, A->rt_station, 0, A->rt_priority);
                     diag_record_completion(&da, A->rt_task);
-                    apply_task_effects(w, A, A->rt_task);
+                    apply_task_effects(w, A, completed_task, &log);
+                    json_emit_inventory_changes(&log, day, tick, "task_completed", A, completed_task, &before, w);
+                    inv_snapshot_free(&before);
                     A->rt_task = NULL;
                     A->rt_station = NULL;
                     A->rt_priority = 0;
@@ -844,9 +1218,15 @@ void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
             if (B->rt_remaining>0) {
                 B->rt_remaining--;
                 if (B->rt_remaining==0 && B->rt_task) {
-                    printf("    %s completed: %s\n", B->name, B->rt_task);
+                    const char *completed_task = B->rt_task;
+                    InvSnapshot before;
+                    inv_snapshot_capture(&before, &w->inv);
+                    sim_textf(&log, "    %s completed: %s\n", B->name, completed_task);
+                    json_emit_task_event(&log, "task_completed", day, tick, B, completed_task, B->rt_station, 0, B->rt_priority);
                     diag_record_completion(&db, B->rt_task);
-                    apply_task_effects(w, B, B->rt_task);
+                    apply_task_effects(w, B, completed_task, &log);
+                    json_emit_inventory_changes(&log, day, tick, "task_completed", B, completed_task, &before, w);
+                    inv_snapshot_free(&before);
                     B->rt_task = NULL;
                     B->rt_station = NULL;
                     B->rt_priority = 0;
@@ -865,11 +1245,11 @@ void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
                 if (ca.station && cb.station && strcmp(ca.station, cb.station)==0) {
                     int a_wins = (ca.priority > cb.priority) || (ca.priority==cb.priority && strcmp(A->name, B->name)<=0);
                     if (a_wins) {
-                        printf("    CONFLICT: station '%s' claimed by %s (priority %.1f); %s yields\n", ca.station, A->name, ca.priority, B->name);
+                        sim_textf(&log, "    CONFLICT: station '%s' claimed by %s (priority %.1f); %s yields\n", ca.station, A->name, ca.priority, B->name);
                         db.conflict_yields++;
                         cb.kind = 3;
                     } else {
-                        printf("    CONFLICT: station '%s' claimed by %s (priority %.1f); %s yields\n", cb.station, B->name, cb.priority, A->name);
+                        sim_textf(&log, "    CONFLICT: station '%s' claimed by %s (priority %.1f); %s yields\n", cb.station, B->name, cb.priority, A->name);
                         da.conflict_yields++;
                         ca.kind = 3;
                     }
@@ -883,13 +1263,14 @@ void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
                     A->rt_station = ca.station;
                     A->rt_remaining = ca.ticks;
                     A->rt_priority = ca.priority;
-                    printf("    %s starts: %s (%dt) station=%s priority=%.1f\n", A->name, ca.task_name, ca.ticks, ca.station?ca.station:"-", ca.priority);
+                    sim_textf(&log, "    %s starts: %s (%dt) station=%s priority=%.1f\n", A->name, ca.task_name, ca.ticks, ca.station?ca.station:"-", ca.priority);
+                    json_emit_task_event(&log, "task_started", day, tick, A, ca.task_name, ca.station, ca.ticks, ca.priority);
                 } else {
                     da.idle_ticks++;
-                    printf("    %s idle\n", A->name);
+                    sim_textf(&log, "    %s idle\n", A->name);
                 }
             } else {
-                printf("    %s continues: %s (remaining %dt)\n", A->name, A->rt_task?A->rt_task:"(none)", A->rt_remaining);
+                sim_textf(&log, "    %s continues: %s (remaining %dt)\n", A->name, A->rt_task?A->rt_task:"(none)", A->rt_remaining);
             }
 
             if (B->rt_remaining==0) {
@@ -898,64 +1279,91 @@ void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
                     B->rt_station = cb.station;
                     B->rt_remaining = cb.ticks;
                     B->rt_priority = cb.priority;
-                    printf("    %s starts: %s (%dt) station=%s priority=%.1f\n", B->name, cb.task_name, cb.ticks, cb.station?cb.station:"-", cb.priority);
+                    sim_textf(&log, "    %s starts: %s (%dt) station=%s priority=%.1f\n", B->name, cb.task_name, cb.ticks, cb.station?cb.station:"-", cb.priority);
+                    json_emit_task_event(&log, "task_started", day, tick, B, cb.task_name, cb.station, cb.ticks, cb.priority);
                 } else {
                     db.idle_ticks++;
-                    printf("    %s idle\n", B->name);
+                    sim_textf(&log, "    %s idle\n", B->name);
                 }
             } else {
-                printf("    %s continues: %s (remaining %dt)\n", B->name, B->rt_task?B->rt_task:"(none)", B->rt_remaining);
+                sim_textf(&log, "    %s continues: %s (remaining %dt)\n", B->name, B->rt_task?B->rt_task:"(none)", B->rt_remaining);
             }
 
             /* Phase 4: resolve event consequences after action assignment. */
             if (ev_breach) {
                 int defended = 0;
+                double structure_before = w->shelter.structure;
                 if (A->rt_task && strstr(A->rt_task, "Defensive")!=NULL) defended = 1;
                 if (B->rt_task && strstr(B->rt_task, "Defensive")!=NULL) defended = 1;
                 if (!defended) {
                     double dmg = 4.0*breach_level;
                     w->shelter.structure -= dmg;
                     if (w->shelter.structure<0) w->shelter.structure = 0;
-                    printf("    BREACH impact: structure -%.0f (now %.0f)\n", dmg, w->shelter.structure);
+                    sim_textf(&log, "    BREACH impact: structure -%.0f (now %.0f)\n", dmg, w->shelter.structure);
                 } else {
-                    printf("    BREACH defended: minimal structure loss\n");
+                    sim_textf(&log, "    BREACH defended: minimal structure loss\n");
                     w->shelter.structure -= (breach_level==3?1.0:0.5);
                     if (w->shelter.structure<0) w->shelter.structure = 0;
                 }
+                json_emit_breach_impact(&log, day, tick, breach_level, defended, structure_before, w->shelter.structure);
             }
 
-            print_status(A);
-            print_status(B);
+            print_status(&log, A);
+            print_status(&log, B);
 
             if (ev_overnight) {
                 /* Phase 5 (last tick only): overnight encounter + plant cycle. */
                 int roll = rand_percent();
                 if (roll < (int)(w->events.overnight_chance+0.5)) {
-                    printf("    overnight_threat_check: contact outside (roll=%d < %.0f%%)\n", roll, w->events.overnight_chance);
+                    sim_textf(&log, "    overnight_threat_check: contact outside (roll=%d < %.0f%%)\n", roll, w->events.overnight_chance);
                     w->shelter.signature += 1.0;
+                    json_emit_overnight_check(&log, day, tick, roll, w->events.overnight_chance, 1);
                 } else {
-                    printf("    overnight_threat_check: quiet night (roll=%d)\n", roll);
+                    sim_textf(&log, "    overnight_threat_check: quiet night (roll=%d)\n", roll);
                     if (w->shelter.signature>0) w->shelter.signature -= 0.5;
                     if (w->shelter.signature<0) w->shelter.signature = 0;
+                    json_emit_overnight_check(&log, day, tick, roll, w->events.overnight_chance, 0);
                 }
 
-                overnight_plant_tick(w);
-                printf("    hydroponics: health=%.0f plants=%.1f tomato=%.0f green_bean=%.0f chili=%.0f garlic=%.0f\n",
-                       w->hydroponic_health,
-                       inv_stock(&w->inv, "Plant"),
-                       inv_stock(&w->inv, "Tomato"),
-                       inv_stock(&w->inv, "Green bean"),
-                       inv_stock(&w->inv, "Chili"),
-                       inv_stock(&w->inv, "Garlic"));
+                {
+                    InvSnapshot before;
+                    inv_snapshot_capture(&before, &w->inv);
+                    overnight_plant_tick(w, &log, day, tick);
+                    json_emit_inventory_changes(&log, day, tick, "overnight_plant_tick", NULL, NULL, &before, w);
+                    inv_snapshot_free(&before);
+                }
+                sim_textf(&log, "    hydroponics: health=%.0f plants=%.1f tomato=%.0f carrot=%.0f green_bean=%.0f chili=%.0f garlic=%.0f basil=%.0f\n",
+                          w->hydroponic_health,
+                          inv_stock(&w->inv, "Plant"),
+                          inv_stock(&w->inv, "Tomato"),
+                          inv_stock(&w->inv, "Carrot"),
+                          inv_stock(&w->inv, "Green bean"),
+                          inv_stock(&w->inv, "Chili"),
+                          inv_stock(&w->inv, "Garlic"),
+                          inv_stock(&w->inv, "Basil"));
             }
+            json_emit_state(&log, "tick_snapshot", day, tick, w, A, B);
         }
     }
 
-    printf("\n=== SIMULATION COMPLETE ===\n");
-    print_world_diagnostics(w);
-    print_agent_diagnostics(A, cat, w, &da);
-    print_agent_diagnostics(B, cat, w, &db);
+    if (log.json) {
+        json_emit_state(&log, "final_state", days, 0, w, A, B);
+        fprintf(sim_stream(&log), "{\"type\":\"simulation_complete\",\"days\":%d}\n", days);
+    } else {
+        printf("\n=== SIMULATION COMPLETE ===\n");
+        print_world_diagnostics(w);
+        print_agent_diagnostics(A, cat, w, &da);
+        print_agent_diagnostics(B, cat, w, &db);
+    }
 
     diag_free(&da);
     diag_free(&db);
+}
+
+void run_sim(World *w, Catalog *cat, Character *A, Character *B, int days) {
+    SimOptions options;
+    options.mode = LB_SIM_OUTPUT_TEXT;
+    options.out = stdout;
+    options.seed = 0;
+    run_sim_with_options(w, cat, A, B, days, &options);
 }

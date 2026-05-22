@@ -67,7 +67,9 @@ char *trim_ws(char *s) {
 
 double produce_total(World *w) {
     return inv_stock(&w->inv, "Tomato")
+           + inv_stock(&w->inv, "Carrot")
            + inv_stock(&w->inv, "Green bean")
            + inv_stock(&w->inv, "Chili")
-           + inv_stock(&w->inv, "Garlic");
+           + inv_stock(&w->inv, "Garlic")
+           + inv_stock(&w->inv, "Basil");
 }

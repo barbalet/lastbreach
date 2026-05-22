@@ -50,6 +50,27 @@ static const char *kGrowerSrc =
     "  }\n"
     "}\n";
 
+static const char *kJsonOpsSrc =
+    "character \"Ops\" {\n"
+    "  version 1;\n"
+    "  plan {\n"
+    "    block day 0..24 {\n"
+    "      if tick == 0 {\n"
+    "        task \"Eating\" for 1t priority 100;\n"
+    "      } else if tick == 1 {\n"
+    "        task \"Gun smithing\" for 1t priority 90;\n"
+    "      } else if tick >= 20 {\n"
+    "        task \"Sleeping\" for 1t priority 80;\n"
+    "      } else {\n"
+    "        task \"Resting\" for 1t priority 10;\n"
+    "      }\n"
+    "    }\n"
+    "  }\n"
+    "  on \"breach\" priority 120 {\n"
+    "    task \"Defensive shooting\" for 1t priority 120;\n"
+    "  }\n"
+    "}\n";
+
 static void seed_world_and_catalog(World *w, Catalog *cat) {
     /* Neutralize random event pressure so tests remain deterministic. */
     world_init(w);
@@ -57,6 +78,54 @@ static void seed_world_and_catalog(World *w, Catalog *cat) {
     seed_default_catalog(cat);
     w->events.breach_chance = 0.0;
     w->events.overnight_chance = 0.0;
+}
+
+static char *capture_json_run(World *w, Catalog *cat, Character *a, Character *b, int days, unsigned int seed) {
+    FILE *tmp = tmpfile();
+    SimOptions options;
+    long len;
+    char *buf;
+    size_t read_len;
+
+    if (!tmp) dief("tmpfile failed while capturing JSON output");
+    options.mode = LB_SIM_OUTPUT_JSONL;
+    options.out = tmp;
+    options.seed = seed;
+
+    srand(seed);
+    run_sim_with_options(w, cat, a, b, days, &options);
+
+    fflush(tmp);
+    if (fseek(tmp, 0, SEEK_END) != 0) dief("failed to seek JSON capture");
+    len = ftell(tmp);
+    if (len < 0) dief("failed to measure JSON capture");
+    if (fseek(tmp, 0, SEEK_SET) != 0) dief("failed to rewind JSON capture");
+
+    buf = xmalloc((size_t)len + 1);
+    read_len = fread(buf, 1, (size_t)len, tmp);
+    buf[read_len] = '\0';
+    fclose(tmp);
+    return buf;
+}
+
+static int contains_text(const char *haystack, const char *needle) {
+    return strstr(haystack, needle) != NULL;
+}
+
+static void seed_json_contract_world(World *w, Catalog *cat) {
+    seed_world_and_catalog(w, cat);
+    w->events.breach_chance = 100.0;
+    w->events.overnight_chance = 100.0;
+    w->hydroponic_health = 95.0;
+    w->shelter.water_safe = 30.0;
+    inv_add(&w->inv, "Food", 4.0, 100.0);
+    inv_add(&w->inv, "Gun cleaning kit", 1.0, 100.0);
+    inv_add(&w->inv, "Rifle", 1.0, 100.0);
+    inv_add(&w->inv, "Ammunition", 12.0, 100.0);
+    inv_add(&w->inv, "Hydroponic planter", 1.0, 100.0);
+    inv_add(&w->inv, "Plant", 6.0, 100.0);
+    inv_add(&w->inv, "Fertilizer", 10.0, 100.0);
+    inv_add(&w->inv, "Water", 20.0, 100.0);
 }
 
 static void test_choose_action_precedence(void) {
@@ -163,8 +232,74 @@ static void test_run_sim_hydroponics_produce(void) {
     ASSERT_TRUE(inv_stock(&w.inv, "Plant") > 0.0);
 }
 
+static void test_run_sim_json_event_contract(void) {
+    World w;
+    Catalog cat;
+    Character ops, grower;
+    char *json;
+
+    parse_character_text("json_ops", kJsonOpsSrc, &ops);
+    parse_character_text("json_grower", kGrowerSrc, &grower);
+    seed_json_contract_world(&w, &cat);
+
+    json = capture_json_run(&w, &cat, &ops, &grower, 1, 77);
+
+    ASSERT_TRUE(contains_text(json, "\"type\":\"run_start\""));
+    ASSERT_TRUE(contains_text(json, "\"type\":\"initial_state\""));
+    ASSERT_TRUE(contains_text(json, "\"type\":\"tick_snapshot\""));
+    ASSERT_TRUE(contains_text(json, "\"type\":\"task_started\""));
+    ASSERT_TRUE(contains_text(json, "\"type\":\"task_completed\""));
+    ASSERT_TRUE(contains_text(json, "\"type\":\"inventory_changed\""));
+    ASSERT_TRUE(contains_text(json, "\"type\":\"breach\""));
+    ASSERT_TRUE(contains_text(json, "\"type\":\"breach_impact\""));
+    ASSERT_TRUE(contains_text(json, "\"type\":\"overnight_threat_check\""));
+    ASSERT_TRUE(contains_text(json, "\"type\":\"harvest\""));
+    ASSERT_TRUE(contains_text(json, "\"type\":\"final_state\""));
+    ASSERT_TRUE(contains_text(json, "\"type\":\"simulation_complete\""));
+
+    ASSERT_TRUE(contains_text(json, "\"task\":\"Eating\""));
+    ASSERT_TRUE(contains_text(json, "\"task\":\"Gun smithing\""));
+    ASSERT_TRUE(contains_text(json, "\"task\":\"Watering plants\""));
+    ASSERT_TRUE(contains_text(json, "\"task\":\"Hydroponics maintenance\""));
+    ASSERT_TRUE(contains_text(json, "\"task\":\"Defensive shooting\""));
+    ASSERT_TRUE(contains_text(json, "\"task\":\"Sleeping\""));
+    ASSERT_TRUE(contains_text(json, "\"character_id\":\"ops\""));
+    ASSERT_TRUE(contains_text(json, "\"station_id\":\"hydroponics\""));
+    ASSERT_TRUE(contains_text(json, "\"item_id\":\"ammunition\""));
+
+    free(json);
+}
+
+static void test_run_sim_json_deterministic_output(void) {
+    World w1, w2;
+    Catalog cat1, cat2;
+    Character ops1, grower1, ops2, grower2;
+    char *json1;
+    char *json2;
+
+    parse_character_text("json_ops_1", kJsonOpsSrc, &ops1);
+    parse_character_text("json_grower_1", kGrowerSrc, &grower1);
+    seed_json_contract_world(&w1, &cat1);
+
+    parse_character_text("json_ops_2", kJsonOpsSrc, &ops2);
+    parse_character_text("json_grower_2", kGrowerSrc, &grower2);
+    seed_json_contract_world(&w2, &cat2);
+
+    json1 = capture_json_run(&w1, &cat1, &ops1, &grower1, 1, 77);
+    json2 = capture_json_run(&w2, &cat2, &ops2, &grower2, 1, 77);
+
+    ASSERT_STREQ(json1, json2);
+    ASSERT_TRUE(contains_text(json1, "\"schema_version\":1"));
+    ASSERT_TRUE(contains_text(json1, "\"seed\":77"));
+
+    free(json1);
+    free(json2);
+}
+
 void register_scheduler_sim_tests(void) {
     test_run_case("scheduler precedence", test_choose_action_precedence);
     test_run_case("sim cooked-food bonus", test_run_sim_cooked_food_bonus);
     test_run_case("sim hydroponics produce", test_run_sim_hydroponics_produce);
+    test_run_case("sim json event contract", test_run_sim_json_event_contract);
+    test_run_case("sim json deterministic output", test_run_sim_json_deterministic_output);
 }
