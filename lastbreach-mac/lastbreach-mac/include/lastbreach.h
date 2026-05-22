@@ -383,6 +383,7 @@ void parse_character(Parser *ps, Character *out);
 
 void parse_catalog(Catalog *cat, const char *filename, char *src);
 void parse_world(World *w, const char *filename, char *src);
+void parse_world_character_overrides(const char *filename, char *src, Character *A, Character *B);
 
 /* -------------------------------------------------------------------------- */
 /* File I/O                                                                      */

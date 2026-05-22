@@ -244,7 +244,8 @@ static void json_emit_world(FILE *out, World *w) {
             "{\"temp_c\":%.3f,\"signature\":%.3f,\"power\":%.3f,\"water_safe\":%.3f,"
             "\"water_raw\":%.3f,\"structure\":%.3f,\"contamination\":%.3f,"
             "\"hydroponic_health\":%.3f,\"plants_watered_today\":%d,"
-            "\"hydroponics_maintained_today\":%d,\"cooked_food_portions\":%.3f}",
+            "\"hydroponics_maintained_today\":%d,\"cooked_food_portions\":%.3f,"
+            "\"breach_chance\":%.3f,\"overnight_chance\":%.3f}",
             w->shelter.temp_c,
             w->shelter.signature,
             w->shelter.power,
@@ -255,7 +256,9 @@ static void json_emit_world(FILE *out, World *w) {
             w->hydroponic_health,
             w->plants_watered_today,
             w->hydroponics_maintained_today,
-            w->cooked_food_portions);
+            w->cooked_food_portions,
+            w->events.breach_chance,
+            w->events.overnight_chance);
 }
 
 static void json_emit_inventory(FILE *out, Inventory *inv) {

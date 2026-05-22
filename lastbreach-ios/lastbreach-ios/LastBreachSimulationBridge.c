@@ -88,10 +88,11 @@ char *lb_ios_run_simulation_json(
 
     world_copy = xstrdup(world_source);
     parse_world(&world, "world.lbw", world_copy);
-    free(world_copy);
 
     parse_character_source(&joel, "joel.lbp", joel_source);
     parse_character_source(&mara, "mara.lbp", mara_source);
+    parse_world_character_overrides("world.lbw", world_copy, &joel, &mara);
+    free(world_copy);
 
     output = tmpfile();
     if (!output) {

@@ -2,6 +2,8 @@ import SwiftUI
 import SceneKit
 
 struct ContentView: View {
+    private let saveStore = SimulationSaveStore()
+
     @State private var removeEnvironment = false
     @State private var showGrid = true
     @State private var visualCatalog: VisualCatalog
@@ -16,22 +18,47 @@ struct ContentView: View {
     @State private var simulationStatus: String
     @State private var isSimulationPlaying = false
     @State private var playbackTask: Task<Void, Never>?
+    @State private var hasSavedGame: Bool
 
     init() {
         let catalog = VisualCatalog.loadBundled()
-        let seed = SimulationScenarioSources.defaultSeed
+        let store = SimulationSaveStore()
+        let savedGame = try? store.loadAutosave()
+        let seed = savedGame?.seed ?? SimulationScenarioSources.defaultSeed
+        let requestedDays = max(3, savedGame?.days ?? 3)
         let trace: SimulationTrace
         let status: String
         do {
-            trace = try SimulationTrace.loadDefault(days: 3, seed: seed)
-            status = "Loaded \(trace.days) days from \(trace.sourceMode.title)"
+            trace = try SimulationTrace.loadDefault(days: requestedDays, seed: seed)
+            if let savedGame {
+                status = "Loaded save \(savedGame.displayLocation)"
+            } else {
+                status = "Loaded \(trace.days) days from \(trace.sourceMode.title)"
+            }
         } catch {
-            trace = .empty
-            status = error.localizedDescription
+            if let savedGame {
+                trace = SimulationTrace(
+                    seed: savedGame.seed,
+                    days: savedGame.days,
+                    initialSnapshot: savedGame.snapshot,
+                    snapshots: [],
+                    events: [],
+                    sourceMode: savedGame.sourceMode
+                )
+                status = "Loaded save snapshot; \(error.localizedDescription)"
+            } else {
+                trace = .empty
+                status = error.localizedDescription
+            }
         }
+        let restoredIndex = savedGame?.restoredTickIndex(in: trace)
+        let tickIndex = restoredIndex ?? -1
+        let startingSnapshot = savedGame != nil && restoredIndex == nil
+            ? savedGame?.snapshot
+            : Self.snapshot(for: tickIndex, in: trace) ?? savedGame?.snapshot ?? trace.initialSnapshot
 
         let state = VisualSceneState.simulationBacked(
-            snapshot: trace.initialSnapshot,
+            snapshot: startingSnapshot,
             catalog: catalog,
             fallback: .firstPlayable,
             featuredTaskIds: VisualSceneState.firstPlayable.featuredTaskIds
@@ -40,7 +67,7 @@ struct ContentView: View {
         let planning = DayPlanningState.simulationDriven(
             sceneState: state,
             catalog: catalog,
-            snapshot: trace.initialSnapshot
+            snapshot: startingSnapshot
         )
         let initialSelection = "character.joel"
         let scene = VoxelSceneFactory.makeScene(
@@ -57,9 +84,10 @@ struct ContentView: View {
         _selectedEntityID = State(initialValue: initialSelection)
         _scene = State(initialValue: scene)
         _simulationTrace = State(initialValue: trace)
-        _simulationTickIndex = State(initialValue: -1)
+        _simulationTickIndex = State(initialValue: tickIndex)
         _simulationSeed = State(initialValue: seed)
         _simulationStatus = State(initialValue: status)
+        _hasSavedGame = State(initialValue: store.autosaveExists)
     }
 
     var body: some View {
@@ -102,6 +130,7 @@ struct ContentView: View {
         }
         .onDisappear {
             stopPlayback()
+            persistCurrentGameSilently()
         }
     }
 
@@ -221,6 +250,7 @@ struct ContentView: View {
                 .buttonStyle(PlanningPrimaryButtonStyle())
 
                 Button {
+                    LastBreachFeedback.play(.step)
                     advanceSimulationTick(animated: true)
                 } label: {
                     Image(systemName: "forward.frame.fill")
@@ -231,6 +261,7 @@ struct ContentView: View {
                 .buttonStyle(PlanningIconButtonStyle())
 
                 Button {
+                    LastBreachFeedback.play(.dayRun)
                     runCurrentSimulationDay()
                 } label: {
                     Image(systemName: "sun.max.fill")
@@ -241,6 +272,7 @@ struct ContentView: View {
                 .buttonStyle(PlanningIconButtonStyle())
 
                 Button {
+                    LastBreachFeedback.play(.step)
                     reloadSimulation()
                 } label: {
                     Image(systemName: "arrow.clockwise")
@@ -249,6 +281,8 @@ struct ContentView: View {
                 .accessibilityLabel("Reload simulation")
                 .buttonStyle(PlanningIconButtonStyle())
             }
+
+            saveControls
 
             HStack(spacing: 6) {
                 Text(currentTimelineText)
@@ -269,6 +303,49 @@ struct ContentView: View {
                 .foregroundStyle(.white.opacity(0.64))
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var saveControls: some View {
+        HStack(spacing: 8) {
+            Button {
+                saveCurrentGame()
+            } label: {
+                Image(systemName: "square.and.arrow.down.fill")
+                    .frame(width: 36, height: 34)
+            }
+            .accessibilityLabel("Save game")
+            .buttonStyle(PlanningIconButtonStyle())
+
+            Button {
+                loadSavedGame()
+            } label: {
+                Image(systemName: "folder.fill")
+                    .frame(width: 36, height: 34)
+            }
+            .disabled(!hasSavedGame)
+            .accessibilityLabel("Load game")
+            .buttonStyle(PlanningIconButtonStyle())
+
+            Button {
+                exportDebugSave()
+            } label: {
+                Image(systemName: "square.and.arrow.up.fill")
+                    .frame(width: 36, height: 34)
+            }
+            .accessibilityLabel("Export debug save")
+            .buttonStyle(PlanningIconButtonStyle())
+
+            Button {
+                importLatestDebugSave()
+            } label: {
+                Image(systemName: "tray.and.arrow.down.fill")
+                    .frame(width: 36, height: 34)
+            }
+            .accessibilityLabel("Import debug save")
+            .buttonStyle(PlanningIconButtonStyle())
+
+            Spacer(minLength: 0)
         }
     }
 
@@ -550,6 +627,7 @@ struct ContentView: View {
     }
 
     private func toggleSimulationPlayback() {
+        LastBreachFeedback.play(isSimulationPlaying ? .pause : .play)
         if isSimulationPlaying {
             stopPlayback()
         } else {
@@ -638,6 +716,119 @@ struct ContentView: View {
         }
     }
 
+    private func makeCurrentSave() throws -> SimulationSaveGame {
+        guard let snapshot = currentSnapshot else {
+            throw SimulationSaveError.missingSnapshot
+        }
+        return SimulationSaveGame(
+            seed: simulationSeed,
+            days: max(simulationTrace.days, snapshot.key.day + 1, 1),
+            tickIndex: simulationTickIndex,
+            sourceMode: simulationTrace.sourceMode,
+            snapshot: snapshot
+        )
+    }
+
+    private func saveCurrentGame() {
+        stopPlayback()
+        do {
+            let save = try makeCurrentSave()
+            try saveStore.saveAutosave(save)
+            hasSavedGame = true
+            simulationStatus = "Saved \(save.displayLocation)"
+            LastBreachFeedback.play(.save)
+        } catch {
+            simulationStatus = error.localizedDescription
+            LastBreachFeedback.play(.warning)
+        }
+    }
+
+    private func loadSavedGame() {
+        stopPlayback()
+        do {
+            try restore(saveStore.loadAutosave(), statusPrefix: "Loaded")
+            LastBreachFeedback.play(.load)
+        } catch {
+            simulationStatus = error.localizedDescription
+            LastBreachFeedback.play(.warning)
+        }
+    }
+
+    private func exportDebugSave() {
+        stopPlayback()
+        do {
+            let save = try makeCurrentSave()
+            let export = try saveStore.exportDebugSave(save)
+            simulationStatus = "Exported \(export.saveURL.lastPathComponent) and \(export.worldURL.lastPathComponent)"
+            LastBreachFeedback.play(.export)
+        } catch {
+            simulationStatus = error.localizedDescription
+            LastBreachFeedback.play(.warning)
+        }
+    }
+
+    private func importLatestDebugSave() {
+        stopPlayback()
+        do {
+            try restore(saveStore.importLatestDebugSave(), statusPrefix: "Imported")
+            LastBreachFeedback.play(.load)
+        } catch {
+            simulationStatus = error.localizedDescription
+            LastBreachFeedback.play(.warning)
+        }
+    }
+
+    private func persistCurrentGameSilently() {
+        guard let save = try? makeCurrentSave() else {
+            return
+        }
+        try? saveStore.saveAutosave(save)
+        hasSavedGame = true
+    }
+
+    private func restore(_ save: SimulationSaveGame, statusPrefix: String) throws {
+        let requestedDays = max(3, save.days, save.snapshot.key.day + 1)
+        let loadedTrace: SimulationTrace
+        do {
+            loadedTrace = try SimulationTrace.loadDefault(days: requestedDays, seed: save.seed)
+        } catch {
+            loadedTrace = SimulationTrace(
+                seed: save.seed,
+                days: save.days,
+                initialSnapshot: save.snapshot,
+                snapshots: [],
+                events: [],
+                sourceMode: save.sourceMode
+            )
+        }
+
+        let restoredIndex = save.restoredTickIndex(in: loadedTrace)
+        let trace: SimulationTrace
+        let tickIndex: Int
+        if let restoredIndex {
+            trace = loadedTrace
+            tickIndex = restoredIndex
+        } else {
+            trace = SimulationTrace(
+                seed: save.seed,
+                days: save.days,
+                initialSnapshot: save.snapshot,
+                snapshots: [],
+                events: [],
+                sourceMode: save.sourceMode
+            )
+            tickIndex = -1
+        }
+
+        simulationSeed = save.seed
+        simulationTrace = trace
+        simulationTickIndex = tickIndex
+        hasSavedGame = true
+        simulationStatus = "\(statusPrefix) \(save.displayLocation)"
+        applySimulationSnapshot(Self.snapshot(for: tickIndex, in: trace) ?? save.snapshot, events: [], animate: false)
+        selectEntity("character.joel")
+    }
+
     private func applySimulationSnapshot(
         _ snapshot: SimulationSnapshot?,
         events: [SimulationTimelineEvent],
@@ -673,9 +864,11 @@ struct ContentView: View {
                 characters: nextPlanning.characters
             )
             SceneActionAnimator.play(schedule: schedule, layout: layout, catalog: visualCatalog, in: scene)
+            LastBreachFeedback.play(for: events)
         } else {
             _ = VoxelSceneFactory.actionContainer(in: scene, reset: true)
         }
+        persistCurrentGameSilently()
     }
 
     private func rebuildScene() {
@@ -758,6 +951,13 @@ struct ContentView: View {
             return .yellow
         }
         return .white.opacity(0.62)
+    }
+
+    private static func snapshot(for tickIndex: Int, in trace: SimulationTrace) -> SimulationSnapshot? {
+        if tickIndex >= 0 && tickIndex < trace.snapshots.count {
+            return trace.snapshots[tickIndex]
+        }
+        return trace.initialSnapshot
     }
 }
 

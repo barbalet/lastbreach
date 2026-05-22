@@ -112,6 +112,53 @@ static int contains_text(const char *haystack, const char *needle) {
     return strstr(haystack, needle) != NULL;
 }
 
+static int count_text(const char *haystack, const char *needle) {
+    int count = 0;
+    const char *cursor = haystack;
+    size_t needle_len = strlen(needle);
+    while ((cursor = strstr(cursor, needle)) != NULL) {
+        count++;
+        cursor += needle_len;
+    }
+    return count;
+}
+
+static void parse_character_file_after_preamble(const char *filename, const char *path, Character *out) {
+    char *src = read_entire_file(path);
+    Parser parser;
+
+    ASSERT_TRUE(src != NULL);
+    ps_init(&parser, filename, src);
+    while (!ps_is_ident(&parser, "character") && !ps_is(&parser, TK_EOF)) {
+        lx_next_token(&parser.lx);
+    }
+    ASSERT_TRUE(!ps_is(&parser, TK_EOF));
+    parse_character(&parser, out);
+    free(src);
+}
+
+static void load_default_scenario(World *w, Catalog *cat, Character *joel, Character *mara) {
+    char *world_src;
+    char *catalog_src;
+
+    world_init(w);
+    cat_init(cat);
+    seed_default_catalog(cat);
+
+    catalog_src = read_entire_file("../../dsl/catalog.lbc");
+    ASSERT_TRUE(catalog_src != NULL);
+    parse_catalog(cat, "../../dsl/catalog.lbc", catalog_src);
+    free(catalog_src);
+
+    world_src = read_entire_file("../../dsl/world.lbw");
+    ASSERT_TRUE(world_src != NULL);
+    parse_world(w, "../../dsl/world.lbw", world_src);
+    free(world_src);
+
+    parse_character_file_after_preamble("joel.lbp", "../../dsl/joel.lbp", joel);
+    parse_character_file_after_preamble("mara.lbp", "../../dsl/mara.lbp", mara);
+}
+
 static void seed_json_contract_world(World *w, Catalog *cat) {
     seed_world_and_catalog(w, cat);
     w->events.breach_chance = 100.0;
@@ -266,6 +313,8 @@ static void test_run_sim_json_event_contract(void) {
     ASSERT_TRUE(contains_text(json, "\"character_id\":\"ops\""));
     ASSERT_TRUE(contains_text(json, "\"station_id\":\"hydroponics\""));
     ASSERT_TRUE(contains_text(json, "\"item_id\":\"ammunition\""));
+    ASSERT_TRUE(contains_text(json, "\"breach_chance\":100.000"));
+    ASSERT_TRUE(contains_text(json, "\"overnight_chance\":100.000"));
 
     free(json);
 }
@@ -296,10 +345,45 @@ static void test_run_sim_json_deterministic_output(void) {
     free(json2);
 }
 
+static void test_default_scenario_three_day_json_contract(void) {
+    World w1, w2;
+    Catalog cat1, cat2;
+    Character joel1, mara1, joel2, mara2;
+    char *json1;
+    char *json2;
+
+    load_default_scenario(&w1, &cat1, &joel1, &mara1);
+    load_default_scenario(&w2, &cat2, &joel2, &mara2);
+
+    json1 = capture_json_run(&w1, &cat1, &joel1, &mara1, 3, 1337);
+    json2 = capture_json_run(&w2, &cat2, &joel2, &mara2, 3, 1337);
+
+    ASSERT_STREQ(json1, json2);
+    ASSERT_EQ_INT(72, count_text(json1, "\"type\":\"tick_snapshot\""));
+    ASSERT_TRUE(contains_text(json1, "\"type\":\"run_start\""));
+    ASSERT_TRUE(contains_text(json1, "\"type\":\"final_state\""));
+    ASSERT_TRUE(contains_text(json1, "\"type\":\"simulation_complete\",\"days\":3"));
+    ASSERT_TRUE(contains_text(json1, "\"source\":\"hydroponics\""));
+    ASSERT_TRUE(contains_text(json1, "\"type\":\"breach\""));
+    ASSERT_TRUE(contains_text(json1, "\"task\":\"Water filtration\""));
+    ASSERT_TRUE(contains_text(json1, "\"task\":\"Watering plants\""));
+    ASSERT_TRUE(contains_text(json1, "\"task\":\"Meal prep\""));
+    ASSERT_TRUE(contains_text(json1, "\"task\":\"Sleeping\""));
+    ASSERT_TRUE(contains_text(json1, "\"type\":\"task_warning\""));
+    ASSERT_TRUE(contains_text(json1, "\"type\":\"task_failed\""));
+    ASSERT_TRUE(contains_text(json1, "\"item_id\":\"plant\""));
+    ASSERT_TRUE(contains_text(json1, "\"item_id\":\"carrot\""));
+    ASSERT_TRUE(contains_text(json1, "\"item_id\":\"basil\""));
+
+    free(json1);
+    free(json2);
+}
+
 void register_scheduler_sim_tests(void) {
     test_run_case("scheduler precedence", test_choose_action_precedence);
     test_run_case("sim cooked-food bonus", test_run_sim_cooked_food_bonus);
     test_run_case("sim hydroponics produce", test_run_sim_hydroponics_produce);
     test_run_case("sim json event contract", test_run_sim_json_event_contract);
     test_run_case("sim json deterministic output", test_run_sim_json_deterministic_output);
+    test_run_case("default scenario three-day json contract", test_default_scenario_three_day_json_contract);
 }

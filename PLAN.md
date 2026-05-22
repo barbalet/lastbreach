@@ -362,6 +362,8 @@ Implemented in Cycle 8:
 
 ## Cycle 9: Persistence, Editing, and Save Flow
 
+Status: complete.
+
 Goal: preserve progress and keep the DSL pipeline useful.
 
 Work:
@@ -380,7 +382,19 @@ Done when:
 - A saved game contains inventory, shelter stats, character stats, plant state, current day, and random seed/progression state.
 - Developer exports can be replayed in `lastbreach-mac` for debugging.
 
+Implemented in Cycle 9:
+
+- Added iOS autosave/load through a versioned JSON save file in Application Support.
+- Saves include schema version, saved time, deterministic seed, simulated day/tick progression, source mode, shelter stats, inventory stacks, character stats, active task state, plant state, and event chance state.
+- Added compact save, load, debug export, and debug import controls to the existing play panel without replacing the shelter scene.
+- The app reloads a saved run on launch by replaying the deterministic simulation trace with the saved seed/tick index, with snapshot fallback for migration or trace-load failures.
+- Debug export writes both the JSON save and a generated `.lbw` snapshot into `LastBreachExports`; authored DSL files are preserved.
+- The Mac runner now understands generated `.lbw` snapshot sections for `simulation_state` and `characters`, so exported shelter snapshots can be replayed with `lastbreach-mac`.
+- Added unit coverage for saved world state and character override parsing.
+
 ## Cycle 10: Release Candidate and Concluding Conditions
+
+Status: complete.
 
 Goal: finish the first playable graphical version.
 
@@ -394,6 +408,15 @@ Work:
 - Update `README.md` with build, run, and gameplay instructions.
 
 Done when all concluding conditions below are met.
+
+Implemented in Cycle 10:
+
+- Added iOS audio and haptic feedback for play controls, stepping, day runs, save/load/export/import, warnings, breaches, and harvest events.
+- Added automated coverage for the bundled three-day scenario, including deterministic replay checks and JSONL event contract assertions.
+- Added a release-candidate check script that builds `lastbreach-mac`, runs unit tests, verifies deterministic three-day replay output, performs a lightweight timing check, and builds `lastbreach-ios` for the simulator.
+- Added a manual QA checklist for supported layouts, the three-day play path, interaction readability, sound/haptics, save/export behavior, and performance notes.
+- Updated `README.md` with build, run, test, first-scenario gameplay, save/export, and release-candidate QA instructions.
+- Verified the release-candidate checks pass, including Mac tests and the iOS simulator build.
 
 ## Concluding Conditions
 

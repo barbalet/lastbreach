@@ -27,6 +27,7 @@ int main(int argc, char **argv) {
     const char *b_path = argv[2];
     const char *world_path = NULL;
     const char *catalog_path = NULL;
+    char *world_src = NULL;
     int days = 1;
     int json_output = 0;
     unsigned int seed = (unsigned int)time(NULL);
@@ -70,10 +71,9 @@ int main(int argc, char **argv) {
         if (!json_output) printf("Loaded catalog: %s\n", catalog_path);
     }
     if (world_path) {
-        char *src = read_entire_file(world_path);
-        if (!src) dief("failed to read world file: %s", world_path);
-        parse_world(&world, world_path, src);
-        free(src);
+        world_src = read_entire_file(world_path);
+        if (!world_src) dief("failed to read world file: %s", world_path);
+        parse_world(&world, world_path, world_src);
         if (!json_output) printf("Loaded world: %s\n", world_path);
     }
     char *a_src = read_entire_file(a_path);
@@ -92,6 +92,9 @@ int main(int argc, char **argv) {
     Character A, B;
     parse_character(&pa, &A);
     parse_character(&pb, &B);
+    if (world_src) {
+        parse_world_character_overrides(world_path, world_src, &A, &B);
+    }
     if (!json_output) {
         printf("Loaded characters: %s and %s\n", A.name, B.name);
         printf("Seed=%u days=%d\n", seed, days);
@@ -103,6 +106,7 @@ int main(int argc, char **argv) {
         options.seed = seed;
         run_sim_with_options(&world, &cat, &A, &B, days, &options);
     }
+    free(world_src);
     free(a_src);
     free(b_src);
     return 0;

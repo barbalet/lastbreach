@@ -1,7 +1,7 @@
 import Foundation
 import UIKit
 
-struct SimulationTimelineKey: Hashable, Comparable {
+struct SimulationTimelineKey: Hashable, Comparable, Codable {
     let day: Int
     let tick: Int
 
@@ -13,7 +13,7 @@ struct SimulationTimelineKey: Hashable, Comparable {
     }
 }
 
-struct SimulationWorld: Decodable, Equatable {
+struct SimulationWorld: Codable, Equatable {
     let tempC: Double
     let signature: Double
     let power: Double
@@ -25,9 +25,11 @@ struct SimulationWorld: Decodable, Equatable {
     let plantsWateredToday: Int
     let hydroponicsMaintainedToday: Int
     let cookedFoodPortions: Double
+    let breachChance: Double?
+    let overnightChance: Double?
 }
 
-struct SimulationCharacterSnapshot: Decodable, Equatable {
+struct SimulationCharacterSnapshot: Codable, Equatable {
     let characterId: String
     let character: String
     let hunger: Double
@@ -45,14 +47,14 @@ struct SimulationCharacterSnapshot: Decodable, Equatable {
     let priority: Double
 }
 
-struct SimulationInventoryStack: Decodable, Equatable {
+struct SimulationInventoryStack: Codable, Equatable {
     let itemId: String
     let item: String
     let qty: Double
     let condition: Double
 }
 
-struct SimulationSnapshot: Equatable {
+struct SimulationSnapshot: Codable, Equatable {
     let type: String
     let key: SimulationTimelineKey
     let world: SimulationWorld
@@ -208,7 +210,7 @@ struct SimulationTrace {
     }
 }
 
-enum SimulationSourceMode: String {
+enum SimulationSourceMode: String, Codable {
     case bundled
     case development
 

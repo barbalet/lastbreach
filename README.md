@@ -43,6 +43,7 @@ The current prototype content lives in:
 
 - `data/tasks.txt`: available activities to schedule/resolve.
 - `data/items.txt`: world objects, tools, resources, and equipment.
+- `dsl/world.lbw`, `dsl/catalog.lbc`, `dsl/joel.lbp`, and `dsl/mara.lbp`: the default playable three-day scenario.
 - `dsl/visual_catalog.json`: visual station, item, and task metadata used by the iOS client.
 
 These files are intended to seed balancing and simulation rules.
@@ -72,7 +73,7 @@ Run the bundled DSL scenario from the runner directory:
 ./lastbreach ../../dsl/joel.lbp ../../dsl/mara.lbp --world ../../dsl/world.lbw --catalog ../../dsl/catalog.lbc --days 3 --seed 123
 ```
 
-Emit machine-readable JSON lines for tools or the future iOS bridge:
+Emit machine-readable JSON lines for tools and the iOS bridge:
 
 ```sh
 ./lastbreach ../../dsl/joel.lbp ../../dsl/mara.lbp --world ../../dsl/world.lbw --catalog ../../dsl/catalog.lbc --days 3 --seed 123 --json
@@ -80,15 +81,15 @@ Emit machine-readable JSON lines for tools or the future iOS bridge:
 
 ### iOS visual app
 
-`lastbreach-ios` contains the SwiftUI/SceneKit iOS app.
+`lastbreach-ios` contains the SwiftUI/SceneKit iOS app. It launches directly into the shelter scene.
 
-The app bundles `dsl/visual_catalog.json` and decodes it at launch so SceneKit/UI code can map simulation task and item names to visual stations, props, poses, and output effects.
+The app bundles the default DSL scenario and `dsl/visual_catalog.json`. The C simulation is embedded through a small bridge and remains the gameplay authority; SwiftUI/SceneKit displays the JSON event stream and turns task events into visible station actions.
 
-The current scene builds a catalog-backed shelter layout with selectable character avatars, stations, props, inventory markers, featured task markers, and a compact inspector panel.
+The current scene builds a catalog-backed shelter layout with selectable character avatars, stations, props, inventory markers, featured task markers, weak-link alerts, and a compact inspector panel.
 
-The current-day planning panel can assign or override Joel and Mara's tasks, adjust priority, validate requirements against inventory/station props, and build the visible task queue for the day.
+The play panel can run, pause, step one tick, run the current day, reload the deterministic simulation, save/load progress, and export/import debug saves.
 
-Starting the day now animates queued actions in the shelter: avatars move to assigned stations and task-specific effects show gunsmithing, plant watering/fertilizing/harvesting, cooking, water filtering, and defense work.
+Simulation playback animates the core loop in the shelter: avatars move to stations and task-specific effects show gunsmithing, plant watering/fertilizing/harvesting, cooking/eating, water filtering, and defense work. Save/load and key simulation events use light audio and haptic cues.
 
 Open `lastbreach-ios/lastbreach-ios.xcodeproj` in Xcode, select the `lastbreach-ios` scheme, choose an iPhone or iPad simulator, and run the app.
 
@@ -97,6 +98,30 @@ Command-line build check:
 ```sh
 xcodebuild -project lastbreach-ios/lastbreach-ios.xcodeproj -scheme lastbreach-ios -destination 'generic/platform=iOS Simulator' build
 ```
+
+### Playing the first scenario
+
+The bundled scenario is a short three-day loop:
+
+1. Day 1 teaches shelter upkeep: water filtration, meal prep, plant watering, and sleep.
+2. Day 2 adds pressure: worn tools, low raw water, structure maintenance, fatigue, and breach risk.
+3. Day 3 tests readiness: plant harvests, low-stock recovery, and another breach path.
+
+During play, watch the weak-link alerts and event log. Low water, food, structure, ammo, tired survivors, sick plants, and worn gear all surface as recoverable problems. The scene should visibly reflect changed inventory, plant health, harvest output, water stores, shelter damage, and active tasks.
+
+Saves are stored as versioned JSON in app support. Debug export writes both the JSON save and a generated `.lbw` snapshot into `LastBreachExports`; those `.lbw` files can be replayed with `lastbreach-mac` for investigation without modifying the authored DSL files.
+
+### Release-candidate QA
+
+Run the automated release check from the repository root:
+
+```sh
+scripts/release_candidate_check.sh
+```
+
+It builds the Mac runner, runs unit tests, verifies the default three-day JSONL scenario is deterministic and complete, checks key bridge-visible events, and builds the iOS simulator target.
+
+Use the manual checklist in `qa/manual_playthrough.md` for device layout, save/load, haptics/audio, visible action readability, and performance notes.
 
 ### Output you’ll see
 
