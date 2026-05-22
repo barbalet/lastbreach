@@ -1,0 +1,344 @@
+# LastBreach Playable Graphics Development Plan
+
+## Total Cycles
+
+Total planned development cycles: 10.
+
+The conclusion of these cycles is a playable iOS shelter simulation where the player can see character avatars, inspect the shelter, assign actions, and watch those actions resolve against visible environment objects. The C simulation remains the source of gameplay truth, the DSL remains the source of editable scenario data, and the iOS app becomes the playable visual client.
+
+## Current Project Shape
+
+- `lastbreach-mac` contains the C99 simulation runner and DSL parser. It currently reads `.lbp`, `.lbw`, and `.lbc` files, runs a tick-based shelter simulation, and prints task/event output.
+- `environmentVis` contains the current iOS/SceneKit visual prototype. It should be renamed to `lastbreach-ios` as part of the first implementation cycle.
+- `dsl` contains the game DSL files:
+  - `dsl/world.lbw`: shelter state, inventory, weather, and events.
+  - `dsl/catalog.lbc`: item and task definitions.
+  - `dsl/joel.lbp` and `dsl/mara.lbp`: survivor behavior plans.
+  - `dsl/dls_definition.md`: DSL specification.
+- `data` contains back history, item lists, task lists, rules, and setting material that should guide the playable version.
+
+## Current Starting Point
+
+The simulation already supports the major verbs needed for the first playable version:
+
+- Scheduling character tasks by priority and day block.
+- Shelter state: temperature, power, water, structure, contamination, signature.
+- Character state: hunger, hydration, fatigue, morale, injury, illness.
+- Hydroponics state, watering, maintenance, fertilizer use, plant growth, and harvest.
+- Produce outputs currently include `Tomato`, `Green bean`, `Chili`, and `Garlic`.
+- Food preparation, cooking, preservation, water filtration, fishing, heating, power management, breach defense, and gunsmithing.
+- Station conflicts and end-of-run diagnostics.
+
+The iOS prototype currently has:
+
+- A SceneKit voxel environment.
+- Two simple character avatars.
+- Toggle controls for grid/environment display.
+- No playable task assignment, simulation bridge, action animation, item inspection, or persistent game loop yet.
+
+## Playable Target
+
+The playable target is a shelter-management game, not a tech demo. The first screen should be the actual shelter scene with active controls. The player should be able to:
+
+- See Joel and Mara as character avatars in the shelter.
+- Inspect shelter stations and important objects.
+- Assign or confirm actions for the current day.
+- Run time forward by ticks or by day.
+- Watch avatars move to action objects and perform task animations.
+- See visible item/state changes after actions complete.
+- Save and load the world through the DSL-backed state pipeline.
+
+Required visible action examples:
+
+- Guns are gunsmithed at a workshop bench using a gun cleaning kit or gunsmith tools.
+- Plants are watered with a watering can.
+- Plants are fertilized during hydroponics maintenance.
+- Produce is harvested and becomes visible inventory or food, including tomatoes, carrots, chilis, and basil.
+- Cooking and eating consume visible food resources.
+- Water filtration and water collection change visible water stores.
+- Breach defense uses visible weapon/defense positions and damages or repairs shelter elements.
+
+## Architecture Direction
+
+Keep gameplay truth in the simulation layer. The iOS app should display and control the simulation, not duplicate rules independently.
+
+Recommended structure:
+
+- `lastbreach-mac`: continue as the C simulation runner and test harness.
+- `lastbreach-ios`: renamed iOS app, SwiftUI plus SceneKit visual client.
+- Shared gameplay contract:
+  - A deterministic game state snapshot format.
+  - A task/event stream format.
+  - A visual metadata layer connecting DSL task/item names to iOS visuals.
+- DSL remains editable content:
+  - Character plans in `.lbp`.
+  - World state in `.lbw`.
+  - Task/item catalog in `.lbc`.
+  - Visual metadata can be added to catalog definitions or stored in a companion file if that keeps the parser simpler.
+
+## Cycle 1: Project Identity and Baseline
+
+Goal: make the workspace names and build targets line up with the intended product.
+
+Work:
+
+- Rename `environmentVis` to `lastbreach-ios`.
+- Rename the Xcode project, target, app struct, display name, bundle identifier, bridging header path, and source folder references as needed.
+- Preserve current SceneKit behavior after the rename.
+- Document how to build and run both apps from a fresh checkout.
+- Keep `lastbreach-mac` building with `make` and `make test`.
+
+Done when:
+
+- `lastbreach-ios` exists as the iOS app folder.
+- No user-facing app name still says `environmentVis`.
+- The iOS app launches and shows the existing voxel scene with the two avatars.
+- The Mac runner and tests still build.
+
+## Cycle 2: Shared State and Event Contract
+
+Goal: give the iOS app reliable data from the simulation.
+
+Work:
+
+- Add a machine-readable simulation output mode to `lastbreach-mac`, preferably JSON lines.
+- Emit initial world state, per-tick state snapshots, task start events, task completion events, inventory changes, breach events, and harvest events.
+- Include stable identifiers for characters, tasks, stations, items, quantities, conditions, and world stats.
+- Add deterministic snapshot tests using fixed seeds.
+- Decide whether the iOS app embeds the C simulation directly or shells out only during development. The production direction should be direct C integration through a thin Swift bridge.
+
+Done when:
+
+- A fixed command such as `lastbreach joel.lbp mara.lbp --world world.lbw --catalog catalog.lbc --days 3 --seed 123 --json` produces stable machine-readable output.
+- Tests prove that key events can be parsed: watering, hydroponics maintenance, harvest, gunsmithing, breach defense, eating, and sleeping.
+- The event contract is documented in this file or a linked schema file.
+
+## Cycle 3: Visual Metadata for DSL Content
+
+Goal: connect simulation nouns to visible game objects.
+
+Work:
+
+- Extend `catalog.lbc` or add a companion metadata file that maps items/tasks to visual ids.
+- Add visual metadata for stations:
+  - `workshop`: gunsmith bench, vise, tool tray, rifle rack.
+  - `hydroponics`: planter, plant slots, water reservoir, fertilizer bag, grow light.
+  - `kitchen`: prep surface, camp stove, storage containers.
+  - `wash`: water filter, bucket, water barrel.
+  - `cot`: sleep/rest area.
+  - `power`: battery, solar controller, multimeter, wiring panel.
+  - `defense`: door, window, firing position, barricade.
+  - `outside`: scouting/fishing edge.
+- Add missing produce items for the requested playable fantasy:
+  - `Carrot`
+  - `Basil`
+- Keep existing produce unless deliberately cut:
+  - `Tomato`
+  - `Green bean`
+  - `Chili`
+  - `Garlic`
+- Add task metadata for action pose, station, hand prop, visible output, and sound/effect hint.
+
+Done when:
+
+- Every first-playable task has a station and visual mapping.
+- Tomatoes, carrots, chilis, and basil exist as harvestable/cookable items.
+- The iOS app can load or compile a visual catalog without hardcoding every task name in view code.
+
+## Cycle 4: iOS Scene Entity System
+
+Goal: replace the one-off visual scene with a small game scene model.
+
+Work:
+
+- Introduce Swift model types for visual entities: character, station, item, prop, task marker, and floating outcome label.
+- Build a deterministic shelter layout from world/catalog metadata.
+- Keep the existing voxel environment as the shelter shell, but add authored station anchors inside it.
+- Add object selection and highlighting.
+- Add labels or compact info panels only where they help play.
+- Add a scene reset/rebuild path when a new world snapshot loads.
+
+Done when:
+
+- Joel and Mara are named selectable characters.
+- At least six stations are visible and selectable: workshop, hydroponics, kitchen, wash, cot, defense.
+- Important inventory objects appear at their stations.
+- The scene can rebuild from a loaded state without duplicating nodes.
+
+## Cycle 5: Character Control and Day Planning UI
+
+Goal: let the player make meaningful assignments before time runs.
+
+Work:
+
+- Add a planning panel for the current day.
+- Show character cards with state bars: hunger, hydration, fatigue, morale, injury, illness.
+- Show valid tasks based on DSL/catalog requirements and current inventory.
+- Allow task assignment or priority override for each character.
+- Show warnings for missing tools, low stock, or dangerous character state.
+- Keep the UI compact and practical; the shelter scene remains the main screen.
+
+Done when:
+
+- The player can assign Joel to gunsmithing and Mara to plant care from the iOS UI.
+- Invalid assignments explain the missing requirement.
+- Starting the day produces a clear schedule or task queue.
+- The UI can handle both automatic DSL-driven plans and player overrides.
+
+## Cycle 6: Core Action Animation Pass
+
+Goal: make the requested actions visibly happen in the world.
+
+Work:
+
+- Add movement from character position to station anchor.
+- Add simple loop animations for:
+  - Gunsmithing: character at workbench, gun/tool prop visible, condition/readiness feedback.
+  - Watering plants: watering can prop, water arc or particle cue, plant health feedback.
+  - Fertilizing plants: fertilizer bag or scoop prop, soil/plant feedback.
+  - Harvesting: produce appears on plant, then transfers to inventory or crate.
+  - Cooking/eating: food moves through kitchen/prep/eat states.
+  - Water filtration: raw water container to filter to safe water store.
+  - Defensive shooting/combat: character at defense anchor, weapon pose, shelter damage feedback.
+- Add task completion effects that are readable but not noisy.
+
+Done when:
+
+- A player can identify what action is being performed without reading the event log.
+- Gunsmithing, watering, fertilizing, and harvesting all have distinct animations.
+- Tomatoes, carrots, chilis, and basil have distinct visible produce forms.
+- Station and prop visibility matches the simulation state.
+
+## Cycle 7: Simulation Bridge in the iOS App
+
+Goal: run the real game loop from the iOS app.
+
+Work:
+
+- Integrate the C simulation into the iOS target through a stable bridge.
+- Load DSL files into the app bundle for the default scenario.
+- Support a development mode that reloads local DSL files quickly.
+- Convert simulation events into scene actions and UI state updates.
+- Add pause, play, next tick, and run day controls.
+- Preserve deterministic seed behavior for debugging.
+
+Done when:
+
+- The iOS app can run at least three in-game days using `world.lbw`, `catalog.lbc`, `joel.lbp`, and `mara.lbp`.
+- The visible event sequence matches the simulation event stream.
+- Pausing and stepping ticks does not desynchronize avatars, inventory, or character state.
+
+## Cycle 8: Gameplay Balance and Failure Readability
+
+Goal: make the playable loop understandable and strategically meaningful.
+
+Work:
+
+- Tune initial world inventory so the first three days exercise plant care, water, food, gunsmithing, rest, and at least one threat path.
+- Add player-readable alerts for weak links: low water, hungry survivor, tired survivor, low structure, low ammunition, sick plants.
+- Add visible consequences:
+  - Plants wilt when neglected.
+  - Shelter damage appears after breach impact.
+  - Guns/tools show worn state.
+  - Food/water stores visibly shrink or grow.
+- Make failures instructive: failed task, missing tool, poor condition, no water, no fertilizer, or no ammo should be visible.
+
+Done when:
+
+- A new player can understand why a task succeeded or failed.
+- Ignoring plants causes visible decline and lower harvests.
+- Maintaining plants produces visible food progress.
+- Ignoring gunsmithing/repair creates visible defense risk.
+
+## Cycle 9: Persistence, Editing, and Save Flow
+
+Goal: preserve progress and keep the DSL pipeline useful.
+
+Work:
+
+- Add save/load for current world state.
+- Decide exact write-back behavior:
+  - Save snapshots as generated `.lbw` files, or
+  - Maintain a separate save file that references original DSL content.
+- Preserve original authored DSL files unless the player explicitly exports a modified scenario.
+- Add export/import for debug saves.
+- Add minimal migration handling for future DSL/schema changes.
+
+Done when:
+
+- The player can quit and resume the same shelter state.
+- A saved game contains inventory, shelter stats, character stats, plant state, current day, and random seed/progression state.
+- Developer exports can be replayed in `lastbreach-mac` for debugging.
+
+## Cycle 10: Release Candidate and Concluding Conditions
+
+Goal: finish the first playable graphical version.
+
+Work:
+
+- Complete visual polish for the core loop.
+- Add sound and haptic cues where useful.
+- Add performance checks on simulator and target devices.
+- Add automated tests for the simulation bridge and deterministic runs.
+- Add manual QA scripts for the main playable path.
+- Update `README.md` with build, run, and gameplay instructions.
+
+Done when all concluding conditions below are met.
+
+## Concluding Conditions
+
+Development is complete for this plan when:
+
+- The iOS app folder and product are named `lastbreach-ios`.
+- The app launches directly into a playable shelter scene.
+- Joel and Mara appear as controllable or assignable avatars.
+- The player can assign actions and run time forward.
+- The Mac simulation remains the gameplay authority and can replay the same scenario deterministically.
+- The iOS scene reflects simulation state for:
+  - Characters.
+  - Stations.
+  - Inventory objects.
+  - Plant growth and harvest.
+  - Weapon/gunsmithing state.
+  - Water, food, power, structure, and contamination.
+- Gunsmithing is visible at a workshop with gun/tool props.
+- Plant watering is visible with a watering can or equivalent water prop.
+- Plant fertilizing is visible with fertilizer feedback.
+- Harvesting produces visible tomatoes, carrots, chilis, and basil.
+- At least one complete three-day playthrough is possible from the bundled DSL scenario.
+- The player can understand and recover from common shortages: low water, low food, low rest, low structure, low ammo, and neglected plants.
+- Saves can be loaded without losing shelter, character, inventory, plant, or day state.
+- `lastbreach-mac` builds and its tests pass.
+- `lastbreach-ios` builds and runs without a blank scene.
+- There are no critical UI overlaps on supported iPhone and iPad sizes.
+- The README explains how to build, run, test, and play the first playable version.
+
+## First Playable Scenario
+
+The first playable scenario should be a short three-day loop:
+
+- Day 1 teaches the shelter: water filtration, cooking/eating, plant watering, rest.
+- Day 2 introduces maintenance pressure: fertilizer, gunsmithing, power management, structure repair.
+- Day 3 tests readiness: harvest food, handle low stock, respond to a breach or overnight threat.
+
+Required success path:
+
+- Mara keeps hydroponics alive by watering and maintaining plants.
+- Joel maintains weapons and structure.
+- The player keeps both characters fed, hydrated, and rested enough to avoid collapse.
+- The shelter survives at least one threat check.
+- The player harvests at least one visible produce item.
+
+Required failure path:
+
+- If the player ignores water, food, rest, or structure, the game visibly shows why the shelter is becoming unstable.
+- If the player ignores plants, harvest output falls or plants visibly decline.
+- If the player ignores gunsmithing and ammo readiness, defensive outcomes become worse or riskier.
+
+## Development Notes
+
+- Prefer small, deterministic test scenarios over broad random playtests until the event bridge is stable.
+- Keep visual names and simulation names connected through metadata, not scattered string comparisons.
+- Keep the first playable focused on the shelter, avatars, stations, and visible task resolution.
+- Do not turn the iOS app into a landing page or static viewer; the shelter scene is the game.
+- Preserve the post-apocalypse mundanity tone: routine, maintenance, pressure, and small visible victories.
