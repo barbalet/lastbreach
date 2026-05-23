@@ -50,6 +50,7 @@ enum VoxelSceneFactory {
     private static let interfacesOnlyContainerName = "interfacesOnlyContainer"
     private static let entityContainerName = "lastbreachEntityContainer"
     private static let actionContainerName = "lastbreachActionContainer"
+    static let cameraNodeName = "lastbreachCamera"
     private static let selectionHaloName = "selectionHalo"
     private static let entityNamePrefix = "lastbreach.entity."
     private static let voxelUnit = CGFloat(0.05)
@@ -656,6 +657,7 @@ enum VoxelSceneFactory {
         let cameraNode = SCNNode()
         let camera = SCNCamera()
 
+        cameraNode.name = cameraNodeName
         camera.zNear = 0.01
         camera.zFar = 100
         camera.wantsHDR = true
