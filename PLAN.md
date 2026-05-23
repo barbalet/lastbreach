@@ -172,8 +172,9 @@ Work:
   - `wash`: water filter, bucket, water barrel.
   - `cot`: sleep/rest area.
   - `power`: battery, solar controller, multimeter, wiring panel.
-  - `defense`: door, window, firing position, barricade.
-  - `outside`: scouting/fishing edge.
+  - `defense`: interior gate room with door, firing position, barricade, and repair panel.
+  - `dock`: interior dock bay for fishing, water collection, and water movement.
+  - `comms`: interior observation/radio nook for scouting and telescope-style scans.
 - Add missing produce items for the requested playable fantasy:
   - `Carrot`
   - `Basil`
@@ -193,7 +194,7 @@ Done when:
 Implemented catalog:
 
 - `dsl/visual_catalog.json` is the companion visual metadata file used by the iOS app.
-- `stations` maps station ids to display names, scene roles, anchors, palette hints, and prop ids.
+- `stations` maps station ids to display names, scene roles, anchors, palette hints, prop ids, and colorful multi-use setup modes.
 - `items` maps inventory/content ids to display names, visual ids, categories, scale hints, and station affinities.
 - `tasks` maps every first-playable task name from `data/tasks.txt` to a station id, action pose, hand prop, target prop, output ids, and sound/effect hints.
 - The iOS project bundles this JSON resource and decodes it through `VisualCatalog.swift`.

@@ -228,6 +228,8 @@ enum VoxelSceneFactory {
             root.addChildNode(makeCharacterNode(for: entity))
         case .station:
             root.addChildNode(makeStationNode(for: entity))
+        case .stationUse:
+            root.addChildNode(makeStationUseNode(for: entity))
         case .item:
             root.addChildNode(makeItemNode(for: entity))
         case .prop:
@@ -293,6 +295,36 @@ enum VoxelSceneFactory {
         } else if entity.visual.contains("worn") {
             addStatusBeacon(to: root, color: UIColor(red: 0.84, green: 0.44, blue: 0.21, alpha: 1.0))
         }
+        if entity.visual.contains("convertible") {
+            addConversionRails(to: root)
+        }
+        return root
+    }
+
+    private static func makeStationUseNode(for entity: VisualSceneEntity) -> SCNNode {
+        let root = SCNNode()
+
+        let pad = SCNCylinder(radius: 0.0085, height: 0.0025)
+        pad.materials = [makeEntityMaterial(color: entity.swatch, emission: entity.swatch.withAlphaComponent(0.38))]
+        let padNode = SCNNode(geometry: pad)
+        padNode.position = SCNVector3(0, 0.0015, 0)
+        root.addChildNode(padNode)
+
+        let tab = SCNBox(width: 0.004, height: 0.014, length: 0.004, chamferRadius: 0.0005)
+        tab.materials = [makeEntityMaterial(color: entity.swatch.mixed(with: .white, amount: 0.28), emission: entity.swatch.withAlphaComponent(0.22))]
+        let tabNode = SCNNode(geometry: tab)
+        tabNode.position = SCNVector3(0, 0.009, 0)
+        root.addChildNode(tabNode)
+
+        let label = makeLabel(entity.name, color: entity.swatch.mixed(with: .white, amount: 0.22), scale: 0.0024)
+        label.position = SCNVector3(0, 0.020, 0)
+        root.addChildNode(label)
+
+        let pulse = SCNAction.sequence([
+            SCNAction.scale(to: 1.20, duration: 0.70),
+            SCNAction.scale(to: 0.96, duration: 0.70)
+        ])
+        padNode.runAction(SCNAction.repeatForever(pulse))
         return root
     }
 
@@ -369,6 +401,36 @@ enum VoxelSceneFactory {
         root.addChildNode(node)
     }
 
+    private static func addConversionRails(to root: SCNNode) {
+        let colors = [
+            UIColor(red: 0.25, green: 0.72, blue: 0.94, alpha: 1.0),
+            UIColor(red: 0.93, green: 0.66, blue: 0.24, alpha: 1.0),
+            UIColor(red: 0.45, green: 0.78, blue: 0.36, alpha: 1.0),
+            UIColor(red: 0.82, green: 0.38, blue: 0.66, alpha: 1.0)
+        ]
+
+        let ring = SCNTorus(ringRadius: 0.030, pipeRadius: 0.0012)
+        ring.materials = [makeEntityMaterial(color: colors[0], emission: colors[0].withAlphaComponent(0.30))]
+        let ringNode = SCNNode(geometry: ring)
+        ringNode.position = SCNVector3(0, 0.0065, 0)
+        ringNode.eulerAngles = SCNVector3(Float.pi / 2.0, 0, 0)
+        ringNode.runAction(SCNAction.repeatForever(.rotateBy(x: 0, y: 0, z: CGFloat.pi * 2.0, duration: 7.0)))
+        root.addChildNode(ringNode)
+
+        for (index, color) in colors.enumerated() {
+            let bead = SCNSphere(radius: 0.0036)
+            bead.materials = [makeEntityMaterial(color: color, emission: color.withAlphaComponent(0.42))]
+            let node = SCNNode(geometry: bead)
+            let angle = (Float(index) / Float(colors.count)) * Float.pi * 2.0
+            node.position = SCNVector3(cosf(angle) * 0.032, 0.010, sinf(angle) * 0.032)
+            node.runAction(SCNAction.repeatForever(.sequence([
+                .scale(to: 1.35, duration: 0.45 + (Double(index) * 0.08)),
+                .scale(to: 0.92, duration: 0.45)
+            ])))
+            root.addChildNode(node)
+        }
+    }
+
     private static func addWearBand(to node: SCNNode) {
         let band = SCNBox(width: 0.012, height: 0.0022, length: 0.008, chamferRadius: 0.0)
         band.materials = [makeEntityMaterial(color: UIColor(red: 0.83, green: 0.38, blue: 0.16, alpha: 1.0), roughness: 0.90)]
@@ -422,7 +484,13 @@ enum VoxelSceneFactory {
         if visual.contains("barrel") || visual.contains("bucket") || visual.contains("battery") {
             return SCNCylinder(radius: 0.007, height: 0.014)
         }
-        if visual.contains("rifle") || visual.contains("rod") || visual.contains("antenna") {
+        if visual.contains("reel") || visual.contains("catchment") || visual.contains("trough") || visual.contains("tank") {
+            return SCNCylinder(radius: 0.010, height: 0.010)
+        }
+        if visual.contains("hatch") || visual.contains("door") || visual.contains("panel") || visual.contains("board") {
+            return SCNBox(width: 0.024, height: 0.018, length: 0.004, chamferRadius: 0.0005)
+        }
+        if visual.contains("rifle") || visual.contains("rod") || visual.contains("antenna") || visual.contains("periscope") || visual.contains("line") {
             return SCNBox(width: 0.004, height: 0.004, length: 0.030, chamferRadius: 0.0)
         }
         if visual.contains("table") || visual.contains("bench") || visual.contains("cot") || visual.contains("bed") {
@@ -476,6 +544,8 @@ enum VoxelSceneFactory {
             return 0.018
         case .station:
             return 0.030
+        case .stationUse:
+            return 0.012
         case .taskMarker:
             return 0.014
         case .item, .prop, .outcomeLabel:

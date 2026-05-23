@@ -15,8 +15,8 @@ itemdef "Hydroponic planter" { max_condition: 100; stackable: false; tags: ["gar
 itemdef "Seeds" { stackable: true; tags: ["garden"]; }
 itemdef "Books" { stackable: true; tags: ["morale"]; }
 itemdef "Food storage containers" { stackable: true; tags: ["storage"]; }
-itemdef "Fishing rod" { max_condition: 100; stackable: false; tags: ["tool","outside"]; }
-itemdef "Fishing hooks" { stackable: true; tags: ["tool","outside"]; }
+itemdef "Fishing rod" { max_condition: 100; stackable: false; tags: ["tool","dock"]; }
+itemdef "Fishing hooks" { stackable: true; tags: ["tool","dock"]; }
 itemdef "Bucket" { max_condition: 100; stackable: false; tags: ["tool"]; }
 itemdef "Soldering iron" { max_condition: 100; stackable: false; tags: ["tool","electrical"]; }
 itemdef "Solder wire" { stackable: true; tags: ["material","electrical"]; }
@@ -210,7 +210,7 @@ taskdef "Heating" {
 
 taskdef "Tending a fire" {
   time: 2t;
-  location: near;
+  location: inside;
   risk: med;
   station: heat;
   base_success: 75%;
@@ -220,18 +220,18 @@ taskdef "Tending a fire" {
 
 taskdef "Scouting outside" {
   time: 3t;
-  location: outside;
-  risk: high;
-  station: outside;
+  location: inside;
+  risk: med;
+  station: comms;
   base_success: 55%;
   effects: { fatigue: +6; morale: -1; };
 }
 
 taskdef "Fishing" {
   time: 3t;
-  location: outside;
-  risk: high;
-  station: outside;
+  location: inside;
+  risk: med;
+  station: dock;
   base_success: 60%;
   requires_tools: ["Fishing rod"];
   consumes: { "Fishing hooks": 1; };
@@ -249,7 +249,7 @@ taskdef "Fish cleaning" {
 
 taskdef "Defensive shooting" {
   time: 3t;
-  location: near;
+  location: inside;
   risk: high;
   station: defense;
   base_success: 70%;
@@ -259,7 +259,7 @@ taskdef "Defensive shooting" {
 
 taskdef "Defensive combat" {
   time: 3t;
-  location: near;
+  location: inside;
   risk: high;
   station: defense;
   base_success: 60%;
@@ -462,12 +462,12 @@ taskdef "Aquarium maintenance" {
 
 taskdef "Swimming" {
   time: 2t;
-  station: outside;
+  station: dock;
 }
 
 taskdef "Telescope use" {
   time: 1t;
-  station: outside;
+  station: comms;
 }
 
 taskdef "Soldering" {
@@ -482,5 +482,5 @@ taskdef "Radio communication" {
 
 taskdef "Water collection" {
   time: 2t;
-  station: outside;
+  station: dock;
 }

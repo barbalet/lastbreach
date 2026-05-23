@@ -24,11 +24,14 @@ Use this checklist after `scripts/release_candidate_check.sh` passes.
 - Run through at least three days with seed 1337.
 - Verify the event log shows water filtration, plant watering, meal prep/eating, sleeping, breach contact, and harvest.
 - Confirm avatars move to stations and effects are readable:
+  - Multi-use setup markers and colored conversion rings appear at active shelter stations.
   - Watering can and droplets at hydroponics.
   - Fertilizer/harvest produce at hydroponics.
   - Kitchen stove/bowl/steam for food tasks.
   - Filter and water flow at wash.
-  - Weapon/impact feedback during defense.
+  - Dock-bay water collection, fishing, and water-motion cues remain inside the base.
+  - Comms scanning/periscope cues for scouting/telescope-style tasks.
+  - Weapon/impact feedback in the gate room during defense.
   - Workshop/rifle/tools when gunsmithing is active.
 
 ## Readability And Recovery

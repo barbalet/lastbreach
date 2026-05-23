@@ -6,105 +6,175 @@
       "name": "Workshop",
       "category": "shelter",
       "anchor": [-0.14, -0.12, 0.08],
-      "props": ["workbench", "bench_vise", "tool_tray", "rifle_rack"]
+      "props": ["workbench", "bench_vise", "tool_tray", "rifle_rack"],
+      "uses": [
+        { "id": "gunsmith", "name": "Gunsmith", "swatch": "#D58A3A" },
+        { "id": "repair", "name": "Repair", "swatch": "#78A7C9" },
+        { "id": "craft", "name": "Craft", "swatch": "#C96CA8" }
+      ]
     },
     {
       "id": "hydroponics",
       "name": "Hydroponics",
       "category": "shelter",
       "anchor": [0.12, -0.12, -0.04],
-      "props": ["hydroponic_planter", "plant_slots", "water_reservoir", "fertilizer_bag", "grow_light"]
+      "props": ["hydroponic_planter", "plant_slots", "water_reservoir", "fertilizer_bag", "grow_light"],
+      "uses": [
+        { "id": "grow", "name": "Grow", "swatch": "#56B85A" },
+        { "id": "water", "name": "Water", "swatch": "#43BDE7" },
+        { "id": "harvest", "name": "Harvest", "swatch": "#E45F48" }
+      ]
     },
     {
       "id": "kitchen",
       "name": "Kitchen",
       "category": "shelter",
       "anchor": [-0.04, -0.12, -0.14],
-      "props": ["prep_surface", "camp_stove", "food_crate", "storage_containers"]
+      "props": ["prep_surface", "camp_stove", "food_crate", "storage_containers"],
+      "uses": [
+        { "id": "prep", "name": "Prep", "swatch": "#D99047" },
+        { "id": "cook", "name": "Cook", "swatch": "#E65036" },
+        { "id": "store", "name": "Store", "swatch": "#8AC26A" }
+      ]
     },
     {
       "id": "wash",
       "name": "Wash",
       "category": "shelter",
       "anchor": [0.16, -0.12, 0.10],
-      "props": ["water_filter", "bucket", "water_barrel"]
+      "props": ["water_filter", "bucket", "water_barrel"],
+      "uses": [
+        { "id": "filter", "name": "Filter", "swatch": "#38B7E6" },
+        { "id": "clean", "name": "Clean", "swatch": "#A6DCCB" },
+        { "id": "store_water", "name": "Store", "swatch": "#2E78C7" }
+      ]
     },
     {
       "id": "cot",
       "name": "Cot",
       "category": "shelter",
       "anchor": [-0.18, -0.12, -0.10],
-      "props": ["bedroll", "blanket", "pillow"]
+      "props": ["bedroll", "blanket", "pillow"],
+      "uses": [
+        { "id": "sleep", "name": "Sleep", "swatch": "#8B8AD8" },
+        { "id": "rest", "name": "Rest", "swatch": "#6CBFA8" }
+      ]
     },
     {
       "id": "power",
       "name": "Power",
       "category": "shelter",
       "anchor": [0.02, -0.12, 0.16],
-      "props": ["battery", "solar_controller", "multimeter", "wiring_panel"]
+      "props": ["battery", "solar_controller", "multimeter", "wiring_panel"],
+      "uses": [
+        { "id": "charge", "name": "Charge", "swatch": "#41A3D9" },
+        { "id": "diagnose", "name": "Probe", "swatch": "#E1C33E" },
+        { "id": "wire", "name": "Wire", "swatch": "#E16E44" }
+      ]
     },
     {
       "id": "defense",
-      "name": "Defense",
-      "category": "perimeter",
-      "anchor": [0.22, -0.10, 0.00],
-      "props": ["reinforced_door", "window_slot", "barricade", "firing_position"]
+      "name": "Gate Room",
+      "category": "shelter",
+      "anchor": [0.20, -0.12, -0.01],
+      "props": ["inner_hatch", "reinforced_door", "window_slot", "barricade", "firing_position", "repair_panel", "signal_lamp"],
+      "uses": [
+        { "id": "brace", "name": "Brace", "swatch": "#B66D46" },
+        { "id": "fire", "name": "Fire", "swatch": "#FFB633" },
+        { "id": "repair", "name": "Patch", "swatch": "#D84F3D" }
+      ]
     },
     {
-      "id": "outside",
-      "name": "Outside",
-      "category": "perimeter",
-      "anchor": [0.30, -0.10, -0.18],
-      "props": ["outer_path", "fishing_edge", "scout_marker"]
+      "id": "dock",
+      "name": "Dock Bay",
+      "category": "shelter",
+      "anchor": [0.17, -0.12, -0.18],
+      "props": ["inner_floodgate", "net_reel", "rain_catchment", "water_trough", "swim_line"],
+      "uses": [
+        { "id": "fish", "name": "Fish", "swatch": "#64B5C8" },
+        { "id": "collect", "name": "Collect", "swatch": "#3C9BE6" },
+        { "id": "swim", "name": "Swim", "swatch": "#6B7DDF" }
+      ]
     },
     {
       "id": "heat",
       "name": "Heat",
       "category": "shelter",
       "anchor": [-0.20, -0.12, 0.16],
-      "props": ["barrel_heater", "firewood_stack", "heat_glow"]
+      "props": ["barrel_heater", "firewood_stack", "heat_glow"],
+      "uses": [
+        { "id": "heat", "name": "Heat", "swatch": "#D97138" },
+        { "id": "cook_fire", "name": "Stoke", "swatch": "#F0B23A" }
+      ]
     },
     {
       "id": "med",
       "name": "Medical",
       "category": "shelter",
       "anchor": [-0.12, -0.12, -0.20],
-      "props": ["first_aid_box", "medical_box", "wash_basin"]
+      "props": ["first_aid_box", "medical_box", "wash_basin"],
+      "uses": [
+        { "id": "aid", "name": "Aid", "swatch": "#D95454" },
+        { "id": "treat", "name": "Treat", "swatch": "#74BBD6" }
+      ]
     },
     {
       "id": "lounge",
       "name": "Lounge",
       "category": "shelter",
       "anchor": [0.00, -0.12, 0.00],
-      "props": ["books", "chair", "small_table"]
+      "props": ["books", "chair", "small_table"],
+      "uses": [
+        { "id": "read", "name": "Read", "swatch": "#8D64B5" },
+        { "id": "talk", "name": "Talk", "swatch": "#66B9A7" },
+        { "id": "play", "name": "Play", "swatch": "#D873B5" }
+      ]
     },
     {
       "id": "chores",
       "name": "Chores",
       "category": "shelter",
       "anchor": [0.18, -0.12, -0.12],
-      "props": ["broom", "parts_bin", "rag"]
+      "props": ["broom", "parts_bin", "rag"],
+      "uses": [
+        { "id": "tidy", "name": "Tidy", "swatch": "#C8BC6A" },
+        { "id": "sort", "name": "Sort", "swatch": "#78A7C9" }
+      ]
     },
     {
       "id": "craft",
       "name": "Craft",
       "category": "shelter",
       "anchor": [-0.02, -0.12, 0.20],
-      "props": ["craft_table", "fabric", "paint_box"]
+      "props": ["craft_table", "fabric", "paint_box"],
+      "uses": [
+        { "id": "textile", "name": "Textile", "swatch": "#B56FD0" },
+        { "id": "paint", "name": "Paint", "swatch": "#E06A80" },
+        { "id": "draw", "name": "Draw", "swatch": "#E1C74D" }
+      ]
     },
     {
       "id": "comms",
       "name": "Comms",
       "category": "shelter",
       "anchor": [0.10, -0.12, 0.20],
-      "props": ["radio", "antenna", "laptop"]
+      "props": ["radio", "antenna", "laptop", "periscope", "map_board"],
+      "uses": [
+        { "id": "radio", "name": "Radio", "swatch": "#49A6D8" },
+        { "id": "observe", "name": "Observe", "swatch": "#E5BF42" },
+        { "id": "compute", "name": "Compute", "swatch": "#7C83D9" }
+      ]
     },
     {
       "id": "aquarium",
       "name": "Aquarium",
       "category": "shelter",
       "anchor": [0.20, -0.12, 0.08],
-      "props": ["fish_tank", "water_test_kit"]
+      "props": ["fish_tank", "water_test_kit"],
+      "uses": [
+        { "id": "tank", "name": "Tank", "swatch": "#59BDD1" },
+        { "id": "test", "name": "Test", "swatch": "#9AD36E" }
+      ]
     }
   ],
   "items": [
@@ -142,8 +212,8 @@
     { "id": "first_aid_box", "name": "First-aid box", "kind": "medical", "visual": "first_aid_box", "stationId": "med", "swatch": "#C94B4B" },
     { "id": "medical_box", "name": "Medical box", "kind": "medical", "visual": "medical_box", "stationId": "med", "swatch": "#D8D8D8" },
     { "id": "books", "name": "Books", "kind": "morale", "visual": "book_stack", "stationId": "lounge", "swatch": "#6B4C8A" },
-    { "id": "fishing_rod", "name": "Fishing rod", "kind": "tool", "visual": "fishing_rod", "stationId": "outside", "swatch": "#6A543E" },
-    { "id": "fishing_hooks", "name": "Fishing hooks", "kind": "resource", "visual": "hook_card", "stationId": "outside", "swatch": "#C3C3C3" },
+    { "id": "fishing_rod", "name": "Fishing rod", "kind": "tool", "visual": "fishing_rod", "stationId": "dock", "swatch": "#6A543E" },
+    { "id": "fishing_hooks", "name": "Fishing hooks", "kind": "resource", "visual": "hook_card", "stationId": "dock", "swatch": "#C3C3C3" },
     { "id": "bucket", "name": "Bucket", "kind": "tool", "visual": "bucket", "stationId": "wash", "swatch": "#6D8790" }
   ],
   "tasks": [
@@ -154,7 +224,7 @@
     { "id": "sleeping", "name": "Sleeping", "stationId": "cot", "actionPose": "lie_down", "propIds": ["bedroll"], "animation": "sleep_idle", "visibleOutputs": [] },
     { "id": "resting", "name": "Resting", "stationId": "cot", "actionPose": "sit_rest", "propIds": ["bedroll"], "animation": "rest_idle", "visibleOutputs": [] },
     { "id": "water_filtration", "name": "Water filtration", "stationId": "wash", "actionPose": "operate_filter", "propIds": ["water_filter", "water"], "animation": "filter_water", "visibleOutputs": ["water"] },
-    { "id": "water_collection", "name": "Water collection", "stationId": "outside", "actionPose": "carry_container", "propIds": ["bucket", "water"], "animation": "collect_water", "visibleOutputs": ["water"] },
+    { "id": "water_collection", "name": "Water collection", "stationId": "dock", "actionPose": "carry_container", "propIds": ["bucket", "water"], "animation": "collect_water", "visibleOutputs": ["water"] },
     { "id": "gardening", "name": "Gardening", "stationId": "hydroponics", "actionPose": "plant_seed", "propIds": ["seeds", "soil", "hydroponic_planter"], "animation": "plant_seedling", "visibleOutputs": ["plant"] },
     { "id": "watering_plants", "name": "Watering plants", "stationId": "hydroponics", "actionPose": "hold_watering_can", "propIds": ["watering_can", "plant"], "animation": "water_arc", "visibleOutputs": ["plant"] },
     { "id": "hydroponics_maintenance", "name": "Hydroponics maintenance", "stationId": "hydroponics", "actionPose": "tend_planter", "propIds": ["fertilizer", "hydroponic_planter", "plant"], "animation": "fertilize_and_tune", "visibleOutputs": ["tomato", "carrot", "chili", "basil"] },
@@ -168,9 +238,9 @@
     { "id": "soldering", "name": "Soldering", "stationId": "workshop", "actionPose": "solder_work", "propIds": ["soldering_iron", "solder_wire"], "animation": "solder_loop", "visibleOutputs": [] },
     { "id": "defensive_shooting", "name": "Defensive shooting", "stationId": "defense", "actionPose": "aim_weapon", "propIds": ["rifle", "ammunition"], "animation": "fire_and_recoil", "visibleOutputs": ["firing_position"] },
     { "id": "defensive_combat", "name": "Defensive combat", "stationId": "defense", "actionPose": "brace_melee", "propIds": ["barricade"], "animation": "melee_defense", "visibleOutputs": ["barricade"] },
-    { "id": "fishing", "name": "Fishing", "stationId": "outside", "actionPose": "cast_line", "propIds": ["fishing_rod", "fishing_hooks", "bucket"], "animation": "fish_loop", "visibleOutputs": ["fish"] },
+    { "id": "fishing", "name": "Fishing", "stationId": "dock", "actionPose": "cast_line", "propIds": ["fishing_rod", "fishing_hooks", "bucket"], "animation": "fish_loop", "visibleOutputs": ["fish"] },
     { "id": "fish_cleaning", "name": "Fish cleaning", "stationId": "kitchen", "actionPose": "prep_counter", "propIds": ["fish"], "animation": "clean_fish", "visibleOutputs": ["food"] },
-    { "id": "scouting_outside", "name": "Scouting outside", "stationId": "outside", "actionPose": "scan_perimeter", "propIds": ["scout_marker"], "animation": "lookout_loop", "visibleOutputs": [] },
+    { "id": "scouting_outside", "name": "Scouting outside", "stationId": "comms", "actionPose": "scan_perimeter", "propIds": ["periscope", "map_board"], "animation": "lookout_loop", "visibleOutputs": [] },
     { "id": "heating", "name": "Heating", "stationId": "heat", "actionPose": "feed_heater", "propIds": ["barrel_heater", "firewood"], "animation": "heat_glow", "visibleOutputs": ["heat_glow"] },
     { "id": "tending_a_fire", "name": "Tending a fire", "stationId": "heat", "actionPose": "feed_fire", "propIds": ["firewood"], "animation": "stoke_fire", "visibleOutputs": ["heat_glow"] },
     { "id": "first_aid", "name": "First aid", "stationId": "med", "actionPose": "treat_wound", "propIds": ["first_aid_box"], "animation": "bandage_loop", "visibleOutputs": [] },
@@ -189,8 +259,8 @@
     { "id": "painting", "name": "Painting", "stationId": "craft", "actionPose": "paint_work", "propIds": [], "animation": "paint_loop", "visibleOutputs": [] },
     { "id": "drawing", "name": "Drawing", "stationId": "craft", "actionPose": "draw_work", "propIds": [], "animation": "draw_loop", "visibleOutputs": [] },
     { "id": "aquarium_maintenance", "name": "Aquarium maintenance", "stationId": "aquarium", "actionPose": "tend_tank", "propIds": [], "animation": "aquarium_loop", "visibleOutputs": [] },
-    { "id": "swimming", "name": "Swimming", "stationId": "outside", "actionPose": "outside_motion", "propIds": [], "animation": "swim_marker", "visibleOutputs": [] },
-    { "id": "telescope_use", "name": "Telescope use", "stationId": "outside", "actionPose": "look_through_scope", "propIds": [], "animation": "scan_sky", "visibleOutputs": [] },
+    { "id": "swimming", "name": "Swimming", "stationId": "dock", "actionPose": "inside_water_bay", "propIds": ["swim_line"], "animation": "swim_marker", "visibleOutputs": [] },
+    { "id": "telescope_use", "name": "Telescope use", "stationId": "comms", "actionPose": "look_through_scope", "propIds": ["periscope", "map_board"], "animation": "scan_sky", "visibleOutputs": [] },
     { "id": "radio_communication", "name": "Radio communication", "stationId": "comms", "actionPose": "operate_radio", "propIds": ["radio"], "animation": "radio_loop", "visibleOutputs": [] }
   ]
 }

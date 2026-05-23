@@ -11,7 +11,7 @@ The core fantasy is simple: build a routine that survives pressure.
 
 ## Game Premise
 
-The player is responsible for a small shelter community on the edge of a hostile world. Most play happens inside and around the shelter. Outside expeditions are short, risky, and purpose-driven.
+The player is responsible for a small shelter community on the edge of a hostile world. Play happens inside the shelter: edge-facing work is staged through interior rooms like the gate room, dock bay, and comms nook instead of disappearing off-map.
 
 The game is not about constant combat. It is about logistics, maintenance, morale, and making tradeoffs under scarcity.
 
@@ -85,11 +85,11 @@ Emit machine-readable JSON lines for tools and the iOS bridge:
 
 The app bundles the default DSL scenario and `dsl/visual_catalog.json`. The C simulation is embedded through a small bridge and remains the gameplay authority; SwiftUI/SceneKit displays the JSON event stream and turns task events into visible station actions.
 
-The current scene builds a catalog-backed shelter layout with selectable character avatars, stations, props, inventory markers, featured task markers, weak-link alerts, and a compact inspector panel.
+The current scene builds a catalog-backed shelter layout with selectable character avatars, convertible multi-use stations, props, inventory markers, featured task markers, weak-link alerts, and a compact inspector panel.
 
 The play panel can run, pause, step one tick, run the current day, reload the deterministic simulation, save/load progress, and export/import debug saves.
 
-Simulation playback animates the core loop in the shelter: avatars move to stations and task-specific effects show gunsmithing, plant watering/fertilizing/harvesting, cooking/eating, water filtering, and defense work. Save/load and key simulation events use light audio and haptic cues.
+Simulation playback animates the core loop in the shelter: avatars move to stations and task-specific effects show gunsmithing, plant watering/fertilizing/harvesting, cooking/eating, water filtering, dock-bay collection/fishing, comms scanning, and gate-room defense work. Save/load and key simulation events use light audio and haptic cues.
 
 Open `lastbreach-ios/lastbreach-ios.xcodeproj` in Xcode, select the `lastbreach-ios` scheme, choose an iPhone or iPad simulator, and run the app.
 

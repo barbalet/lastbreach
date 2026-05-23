@@ -191,7 +191,7 @@ static void test_seed_default_catalog_covers_tasks_file(void) {
     ASSERT_EQ_INT(1, cat_find_task(&cat, "Radio communication")->time_ticks);
     ASSERT_STREQ("comms", cat_find_task(&cat, "Radio communication")->station);
     ASSERT_EQ_INT(2, cat_find_task(&cat, "Water collection")->time_ticks);
-    ASSERT_STREQ("outside", cat_find_task(&cat, "Water collection")->station);
+    ASSERT_STREQ("dock", cat_find_task(&cat, "Water collection")->station);
 
     free(tasks);
 }

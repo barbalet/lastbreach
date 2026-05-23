@@ -2,25 +2,25 @@
 {
 	archiveVersion = 1;
 	classes = {
-		};
-		objectVersion = 77;
-		objects = {
+	};
+	objectVersion = 77;
+	objects = {
 
 /* Begin PBXBuildFile section */
-		A1B2C3D4E5F6011111111130 /* visual_catalog.json in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6011111111131 /* visual_catalog.json */; };
-		A1B2C3D4E5F6011111111132 /* world.lbw in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6011111111133 /* world.lbw */; };
-		A1B2C3D4E5F6011111111134 /* catalog.lbc in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6011111111135 /* catalog.lbc */; };
-		A1B2C3D4E5F6011111111136 /* joel.lbp in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6011111111137 /* joel.lbp */; };
-		A1B2C3D4E5F6011111111138 /* mara.lbp in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6011111111139 /* mara.lbp */; };
+		A1B2C3D4E5F6011111111130 /* ../dsl/visual_catalog.json in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6011111111131 /* ../dsl/visual_catalog.json */; };
+		A1B2C3D4E5F6011111111132 /* ../dsl/world.lbw in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6011111111133 /* ../dsl/world.lbw */; };
+		A1B2C3D4E5F6011111111134 /* ../dsl/catalog.lbc in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6011111111135 /* ../dsl/catalog.lbc */; };
+		A1B2C3D4E5F6011111111136 /* ../dsl/joel.lbp in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6011111111137 /* ../dsl/joel.lbp */; };
+		A1B2C3D4E5F6011111111138 /* ../dsl/mara.lbp in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6011111111139 /* ../dsl/mara.lbp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A1B2C3D4E5F6011111111111 /* lastbreach-ios.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "lastbreach-ios.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		A1B2C3D4E5F6011111111131 /* visual_catalog.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = ../dsl/visual_catalog.json; sourceTree = "<group>"; };
-		A1B2C3D4E5F6011111111133 /* world.lbw */ = {isa = PBXFileReference; lastKnownFileType = text; path = ../dsl/world.lbw; sourceTree = "<group>"; };
-		A1B2C3D4E5F6011111111135 /* catalog.lbc */ = {isa = PBXFileReference; lastKnownFileType = text; path = ../dsl/catalog.lbc; sourceTree = "<group>"; };
-		A1B2C3D4E5F6011111111137 /* joel.lbp */ = {isa = PBXFileReference; lastKnownFileType = text; path = ../dsl/joel.lbp; sourceTree = "<group>"; };
-		A1B2C3D4E5F6011111111139 /* mara.lbp */ = {isa = PBXFileReference; lastKnownFileType = text; path = ../dsl/mara.lbp; sourceTree = "<group>"; };
+		A1B2C3D4E5F6011111111131 /* ../dsl/visual_catalog.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = ../dsl/visual_catalog.json; sourceTree = "<group>"; };
+		A1B2C3D4E5F6011111111133 /* ../dsl/world.lbw */ = {isa = PBXFileReference; lastKnownFileType = text; path = ../dsl/world.lbw; sourceTree = "<group>"; };
+		A1B2C3D4E5F6011111111135 /* ../dsl/catalog.lbc */ = {isa = PBXFileReference; lastKnownFileType = text; path = ../dsl/catalog.lbc; sourceTree = "<group>"; };
+		A1B2C3D4E5F6011111111137 /* ../dsl/joel.lbp */ = {isa = PBXFileReference; lastKnownFileType = text; path = ../dsl/joel.lbp; sourceTree = "<group>"; };
+		A1B2C3D4E5F6011111111139 /* ../dsl/mara.lbp */ = {isa = PBXFileReference; lastKnownFileType = text; path = ../dsl/mara.lbp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -46,11 +46,11 @@
 			isa = PBXGroup;
 			children = (
 				A1B2C3D4E5F6011111111112 /* lastbreach-ios */,
-				A1B2C3D4E5F6011111111131 /* visual_catalog.json */,
-				A1B2C3D4E5F6011111111133 /* world.lbw */,
-				A1B2C3D4E5F6011111111135 /* catalog.lbc */,
-				A1B2C3D4E5F6011111111137 /* joel.lbp */,
-				A1B2C3D4E5F6011111111139 /* mara.lbp */,
+				A1B2C3D4E5F6011111111131 /* ../dsl/visual_catalog.json */,
+				A1B2C3D4E5F6011111111133 /* ../dsl/world.lbw */,
+				A1B2C3D4E5F6011111111135 /* ../dsl/catalog.lbc */,
+				A1B2C3D4E5F6011111111137 /* ../dsl/joel.lbp */,
+				A1B2C3D4E5F6011111111139 /* ../dsl/mara.lbp */,
 				A1B2C3D4E5F6011111111115 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -127,11 +127,11 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A1B2C3D4E5F6011111111130 /* visual_catalog.json in Resources */,
-				A1B2C3D4E5F6011111111132 /* world.lbw in Resources */,
-				A1B2C3D4E5F6011111111134 /* catalog.lbc in Resources */,
-				A1B2C3D4E5F6011111111136 /* joel.lbp in Resources */,
-				A1B2C3D4E5F6011111111138 /* mara.lbp in Resources */,
+				A1B2C3D4E5F6011111111130 /* ../dsl/visual_catalog.json in Resources */,
+				A1B2C3D4E5F6011111111132 /* ../dsl/world.lbw in Resources */,
+				A1B2C3D4E5F6011111111134 /* ../dsl/catalog.lbc in Resources */,
+				A1B2C3D4E5F6011111111136 /* ../dsl/joel.lbp in Resources */,
+				A1B2C3D4E5F6011111111138 /* ../dsl/mara.lbp in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -199,7 +199,8 @@
 		A1B2C3D4E5F6011111111124 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
@@ -223,8 +224,8 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SWIFT_OBJC_BRIDGING_HEADER = "lastbreach-ios/LastBreachIOS-Bridging-Header.h";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "lastbreach-ios/LastBreachIOS-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -233,7 +234,8 @@
 		A1B2C3D4E5F6011111111125 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
@@ -257,8 +259,8 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SWIFT_OBJC_BRIDGING_HEADER = "lastbreach-ios/LastBreachIOS-Bridging-Header.h";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "lastbreach-ios/LastBreachIOS-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};

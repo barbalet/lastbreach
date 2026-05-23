@@ -41,6 +41,48 @@ struct VisualStation: Decodable, Identifiable {
     let category: String
     let anchor: [Float]
     let props: [String]
+    let uses: [VisualStationUse]
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case category
+        case anchor
+        case props
+        case uses
+    }
+
+    init(
+        id: String,
+        name: String,
+        category: String,
+        anchor: [Float],
+        props: [String],
+        uses: [VisualStationUse] = []
+    ) {
+        self.id = id
+        self.name = name
+        self.category = category
+        self.anchor = anchor
+        self.props = props
+        self.uses = uses
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        category = try container.decode(String.self, forKey: .category)
+        anchor = try container.decode([Float].self, forKey: .anchor)
+        props = try container.decode([String].self, forKey: .props)
+        uses = try container.decodeIfPresent([VisualStationUse].self, forKey: .uses) ?? []
+    }
+}
+
+struct VisualStationUse: Decodable, Identifiable {
+    let id: String
+    let name: String
+    let swatch: String
 }
 
 struct VisualItem: Decodable, Identifiable {

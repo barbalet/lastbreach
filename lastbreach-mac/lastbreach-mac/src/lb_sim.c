@@ -1379,7 +1379,7 @@ void run_sim_with_options(World *w, Catalog *cat, Character *A, Character *B, in
                 /* Phase 5 (last tick only): overnight encounter + plant cycle. */
                 int roll = rand_percent();
                 if (roll < (int)(w->events.overnight_chance+0.5)) {
-                    sim_textf(&log, "    overnight_threat_check: contact outside (roll=%d < %.0f%%)\n", roll, w->events.overnight_chance);
+                    sim_textf(&log, "    overnight_threat_check: contact at gate room (roll=%d < %.0f%%)\n", roll, w->events.overnight_chance);
                     w->shelter.signature += 1.0;
                     json_emit_overnight_check(&log, day, tick, roll, w->events.overnight_chance, 1);
                 } else {

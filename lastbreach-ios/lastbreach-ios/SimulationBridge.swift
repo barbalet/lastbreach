@@ -388,7 +388,7 @@ private struct SimulationJSONLine: Decodable {
             return (defended ?? false) ? "Breach defended" : "Breach damaged shelter"
         case "overnight_threat_check":
             if contact == true {
-                return "Overnight contact outside"
+                return "Overnight contact at the gate"
             }
             return "Quiet overnight check"
         case "harvest":

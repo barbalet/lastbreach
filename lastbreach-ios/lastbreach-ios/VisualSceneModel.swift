@@ -5,6 +5,7 @@ import UIKit
 enum VisualSceneEntityKind: String {
     case character
     case station
+    case stationUse
     case item
     case prop
     case taskMarker
@@ -16,6 +17,8 @@ enum VisualSceneEntityKind: String {
             return "Character"
         case .station:
             return "Station"
+        case .stationUse:
+            return "Use"
         case .item:
             return "Inventory"
         case .prop:
@@ -206,6 +209,22 @@ struct VisualSceneLayout {
                 )
             }
 
+            for (index, use) in station.uses.enumerated() {
+                result.append(
+                    VisualSceneEntity(
+                        id: "use.\(station.id).\(use.id)",
+                        name: use.name,
+                        kind: .stationUse,
+                        stationId: station.id,
+                        position: anchor + Self.useOffset(index: index, count: station.uses.count),
+                        swatch: UIColor(lastBreachHex: use.swatch),
+                        visual: "station_use|\(use.id)",
+                        detail: "\(station.name) converts for \(use.name.lowercased()) work",
+                        isSelectable: true
+                    )
+                )
+            }
+
             for (index, signal) in stationPresentation.signals.enumerated() {
                 result.append(
                     VisualSceneEntity(
@@ -379,6 +398,10 @@ struct VisualSceneLayout {
         return SCNVector3(x, 0.034, z)
     }
 
+    private static func useOffset(index: Int, count: Int) -> SCNVector3 {
+        radialOffset(index: index, count: count, radius: 0.052, y: 0.018)
+    }
+
     private static func signalOffset(index: Int) -> SCNVector3 {
         let x: Float = index % 2 == 0 ? -0.020 : 0.020
         let z = -0.052 - (Float(index / 2) * 0.012)
@@ -481,6 +504,11 @@ struct VisualSceneLayout {
         var swatch = stationColor(for: station.category)
         var detail: String?
         var signals: [StationSignal] = []
+
+        if station.uses.count > 1 {
+            visual += "|convertible"
+            detail = "\(station.uses.count) setup modes"
+        }
 
         switch station.id {
         case "defense":
