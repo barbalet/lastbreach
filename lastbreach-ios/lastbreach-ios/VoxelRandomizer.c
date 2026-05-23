@@ -30,6 +30,7 @@
  * - 3: floor / wall
  * - 4: wide door segment A
  * - 5: wide door segment B
+ * - 6: ladder
  *
  * High-level generation pipeline
  * ------------------------------
@@ -40,7 +41,8 @@
  * 5) Derive face surfaces from voxel-to-voxel transitions.
  * 6) Apply deterministic window/skylight layout around the shaft.
  * 7) Apply incidental vertical interface labels from voxel transitions.
- * 8) Apply top door layout (single valid opening per side if possible).
+ * 8) Add the agent-built interior scaffold: walls, floors, doors, ladders, trapdoors.
+ * 9) Apply top door layout (single valid opening per side if possible).
  *
  * Design goals
  * ------------
@@ -645,7 +647,8 @@ enum {
     LB_SURFACE_WINDOW_SKYLIGHT = 2,
     LB_SURFACE_FLOOR_WALL = 3,
     LB_SURFACE_DOOR_SEGMENT_A = 4,
-    LB_SURFACE_DOOR_SEGMENT_B = 5
+    LB_SURFACE_DOOR_SEGMENT_B = 5,
+    LB_SURFACE_LADDER = 6
 };
 
 /* Bounds-checked write helper for one surface label at one voxel face. */
@@ -1193,6 +1196,449 @@ static void lb_apply_door_layout(
     }
 }
 
+static void lb_set_paired_x_boundary_surface(
+    size_t grid_size,
+    uint8_t *surfaces_out,
+    size_t faces_per_cell,
+    size_t right_x,
+    size_t y,
+    size_t z,
+    uint8_t surface_type
+) {
+    if (right_x == 0 || right_x >= grid_size) {
+        return;
+    }
+
+    size_t left_x = right_x - 1;
+    lb_set_surface_at(grid_size, surfaces_out, faces_per_cell, left_x, y, z, LB_FACE_RIGHT, surface_type);
+    lb_set_surface_at(grid_size, surfaces_out, faces_per_cell, right_x, y, z, LB_FACE_LEFT, surface_type);
+}
+
+static void lb_set_paired_z_boundary_surface(
+    size_t grid_size,
+    uint8_t *surfaces_out,
+    size_t faces_per_cell,
+    size_t x,
+    size_t y,
+    size_t back_z,
+    uint8_t surface_type
+) {
+    if (back_z == 0 || back_z >= grid_size) {
+        return;
+    }
+
+    size_t front_z = back_z - 1;
+    lb_set_surface_at(grid_size, surfaces_out, faces_per_cell, x, y, front_z, LB_FACE_FRONT, surface_type);
+    lb_set_surface_at(grid_size, surfaces_out, faces_per_cell, x, y, back_z, LB_FACE_BACK, surface_type);
+}
+
+static void lb_set_paired_horizontal_surface(
+    size_t grid_size,
+    uint8_t *surfaces_out,
+    size_t faces_per_cell,
+    size_t x,
+    size_t lower_y,
+    size_t z,
+    uint8_t surface_type
+) {
+    if (lower_y + 1 >= grid_size) {
+        return;
+    }
+
+    lb_set_surface_at(grid_size, surfaces_out, faces_per_cell, x, lower_y, z, LB_FACE_TOP, surface_type);
+    lb_set_surface_at(grid_size, surfaces_out, faces_per_cell, x, lower_y + 1, z, LB_FACE_BOTTOM, surface_type);
+}
+
+static void lb_apply_internal_floor_panel(
+    size_t grid_size,
+    const uint8_t *voxel_types,
+    uint8_t *surfaces_out,
+    size_t faces_per_cell,
+    size_t start_x,
+    size_t end_x,
+    size_t start_z,
+    size_t end_z,
+    size_t lower_y
+) {
+    if (voxel_types == NULL || lower_y + 1 >= grid_size) {
+        return;
+    }
+
+    for (size_t x = start_x; x < end_x && x < grid_size; x++) {
+        for (size_t z = start_z; z < end_z && z < grid_size; z++) {
+            uint8_t lower_type = lb_voxel_type_at(grid_size, voxel_types, (int32_t)x, (int32_t)lower_y, (int32_t)z);
+            uint8_t upper_type = lb_voxel_type_at(grid_size, voxel_types, (int32_t)x, (int32_t)(lower_y + 1), (int32_t)z);
+            if (lower_type == 0 || upper_type != 2) {
+                continue;
+            }
+
+            lb_set_paired_horizontal_surface(
+                grid_size,
+                surfaces_out,
+                faces_per_cell,
+                x,
+                lower_y,
+                z,
+                LB_SURFACE_FLOOR_WALL
+            );
+        }
+    }
+}
+
+static void lb_apply_internal_partition_x(
+    size_t grid_size,
+    const uint8_t *voxel_types,
+    uint8_t *surfaces_out,
+    size_t faces_per_cell,
+    size_t right_x,
+    size_t start_z,
+    size_t end_z,
+    size_t start_y,
+    size_t end_y,
+    size_t door_base_y,
+    size_t door_z
+) {
+    if (voxel_types == NULL || right_x == 0 || right_x >= grid_size || start_y > end_y) {
+        return;
+    }
+
+    size_t left_x = right_x - 1;
+    for (size_t y = start_y; y <= end_y && y < grid_size; y++) {
+        for (size_t z = start_z; z < end_z && z < grid_size; z++) {
+            if (
+                !lb_voxel_is_type(grid_size, voxel_types, left_x, y, z, 2) ||
+                !lb_voxel_is_type(grid_size, voxel_types, right_x, y, z, 2)
+            ) {
+                continue;
+            }
+
+            lb_set_paired_x_boundary_surface(
+                grid_size,
+                surfaces_out,
+                faces_per_cell,
+                right_x,
+                y,
+                z,
+                LB_SURFACE_FLOOR_WALL
+            );
+        }
+    }
+
+    if (door_z < start_z || door_z >= end_z || door_base_y + 1 > end_y) {
+        return;
+    }
+
+    if (
+        lb_voxel_is_type(grid_size, voxel_types, left_x, door_base_y, door_z, 2) &&
+        lb_voxel_is_type(grid_size, voxel_types, right_x, door_base_y, door_z, 2)
+    ) {
+        lb_set_paired_x_boundary_surface(
+            grid_size,
+            surfaces_out,
+            faces_per_cell,
+            right_x,
+            door_base_y,
+            door_z,
+            LB_SURFACE_DOOR_SEGMENT_A
+        );
+    }
+    if (
+        lb_voxel_is_type(grid_size, voxel_types, left_x, door_base_y + 1, door_z, 2) &&
+        lb_voxel_is_type(grid_size, voxel_types, right_x, door_base_y + 1, door_z, 2)
+    ) {
+        lb_set_paired_x_boundary_surface(
+            grid_size,
+            surfaces_out,
+            faces_per_cell,
+            right_x,
+            door_base_y + 1,
+            door_z,
+            LB_SURFACE_DOOR_SEGMENT_B
+        );
+    }
+}
+
+static void lb_apply_internal_partition_z(
+    size_t grid_size,
+    const uint8_t *voxel_types,
+    uint8_t *surfaces_out,
+    size_t faces_per_cell,
+    size_t back_z,
+    size_t start_x,
+    size_t end_x,
+    size_t start_y,
+    size_t end_y,
+    size_t door_base_y,
+    size_t door_x
+) {
+    if (voxel_types == NULL || back_z == 0 || back_z >= grid_size || start_y > end_y) {
+        return;
+    }
+
+    size_t front_z = back_z - 1;
+    for (size_t y = start_y; y <= end_y && y < grid_size; y++) {
+        for (size_t x = start_x; x < end_x && x < grid_size; x++) {
+            if (
+                !lb_voxel_is_type(grid_size, voxel_types, x, y, front_z, 2) ||
+                !lb_voxel_is_type(grid_size, voxel_types, x, y, back_z, 2)
+            ) {
+                continue;
+            }
+
+            lb_set_paired_z_boundary_surface(
+                grid_size,
+                surfaces_out,
+                faces_per_cell,
+                x,
+                y,
+                back_z,
+                LB_SURFACE_FLOOR_WALL
+            );
+        }
+    }
+
+    if (door_x < start_x || door_x >= end_x || door_base_y + 1 > end_y) {
+        return;
+    }
+
+    if (
+        lb_voxel_is_type(grid_size, voxel_types, door_x, door_base_y, front_z, 2) &&
+        lb_voxel_is_type(grid_size, voxel_types, door_x, door_base_y, back_z, 2)
+    ) {
+        lb_set_paired_z_boundary_surface(
+            grid_size,
+            surfaces_out,
+            faces_per_cell,
+            door_x,
+            door_base_y,
+            back_z,
+            LB_SURFACE_DOOR_SEGMENT_A
+        );
+    }
+    if (
+        lb_voxel_is_type(grid_size, voxel_types, door_x, door_base_y + 1, front_z, 2) &&
+        lb_voxel_is_type(grid_size, voxel_types, door_x, door_base_y + 1, back_z, 2)
+    ) {
+        lb_set_paired_z_boundary_surface(
+            grid_size,
+            surfaces_out,
+            faces_per_cell,
+            door_x,
+            door_base_y + 1,
+            back_z,
+            LB_SURFACE_DOOR_SEGMENT_B
+        );
+    }
+}
+
+static void lb_apply_ladder_run_x(
+    size_t grid_size,
+    uint8_t *surfaces_out,
+    size_t faces_per_cell,
+    size_t right_x,
+    size_t z,
+    size_t start_y,
+    size_t end_y
+) {
+    if (right_x == 0 || right_x >= grid_size || z >= grid_size || start_y > end_y) {
+        return;
+    }
+
+    for (size_t y = start_y; y <= end_y && y < grid_size; y++) {
+        lb_set_paired_x_boundary_surface(
+            grid_size,
+            surfaces_out,
+            faces_per_cell,
+            right_x,
+            y,
+            z,
+            LB_SURFACE_LADDER
+        );
+    }
+}
+
+static void lb_apply_internal_trapdoor(
+    size_t grid_size,
+    const uint8_t *voxel_types,
+    uint8_t *surfaces_out,
+    size_t faces_per_cell,
+    size_t x,
+    size_t lower_y,
+    size_t z
+) {
+    if (voxel_types == NULL || x >= grid_size || z >= grid_size || lower_y + 1 >= grid_size) {
+        return;
+    }
+
+    uint8_t lower_type = lb_voxel_type_at(grid_size, voxel_types, (int32_t)x, (int32_t)lower_y, (int32_t)z);
+    uint8_t upper_type = lb_voxel_type_at(grid_size, voxel_types, (int32_t)x, (int32_t)(lower_y + 1), (int32_t)z);
+    if (lower_type == 0 || upper_type != 2) {
+        return;
+    }
+
+    lb_set_paired_horizontal_surface(
+        grid_size,
+        surfaces_out,
+        faces_per_cell,
+        x,
+        lower_y,
+        z,
+        LB_SURFACE_TRAPDOOR_DOOR
+    );
+}
+
+static void lb_apply_agent_built_internal_architecture(
+    size_t grid_size,
+    const uint8_t *voxel_types,
+    uint8_t *surfaces_out,
+    size_t faces_per_cell,
+    size_t center_start_x,
+    size_t center_end_x,
+    size_t center_start_z,
+    size_t center_end_z
+) {
+    if (
+        grid_size < 5 ||
+        voxel_types == NULL ||
+        surfaces_out == NULL ||
+        faces_per_cell < 6 ||
+        center_start_x == 0 ||
+        center_start_z == 0 ||
+        center_end_x >= grid_size ||
+        center_end_z >= grid_size ||
+        center_start_x >= center_end_x ||
+        center_start_z >= center_end_z
+    ) {
+        return;
+    }
+
+    size_t center_width = center_end_x - center_start_x;
+    size_t center_depth = center_end_z - center_start_z;
+    if (center_width < 3 || center_depth < 3) {
+        return;
+    }
+
+    /*
+     * The current caller has no per-agent hobby profile yet, so this pass
+     * creates the initial two-agent buildout: a split lower floor, an upper
+     * hobby deck, and explicit edit points for later station-driven changes.
+     */
+    size_t x_boundary = center_start_x + (center_width / 2);
+    size_t z_boundary = center_start_z + (center_depth / 2);
+    if (x_boundary == center_start_x || x_boundary >= center_end_x) {
+        return;
+    }
+    if (z_boundary == center_start_z || z_boundary >= center_end_z) {
+        return;
+    }
+
+    size_t lower_floor_y = 0;
+    size_t upper_floor_y = grid_size / 2;
+    if (upper_floor_y < 2) {
+        upper_floor_y = 2;
+    }
+    if (upper_floor_y + 1 >= grid_size) {
+        return;
+    }
+
+    lb_apply_internal_floor_panel(
+        grid_size,
+        voxel_types,
+        surfaces_out,
+        faces_per_cell,
+        center_start_x,
+        center_end_x,
+        center_start_z,
+        center_end_z,
+        lower_floor_y
+    );
+    lb_apply_internal_floor_panel(
+        grid_size,
+        voxel_types,
+        surfaces_out,
+        faces_per_cell,
+        center_start_x,
+        center_end_x,
+        center_start_z,
+        center_end_z,
+        upper_floor_y
+    );
+
+    size_t lower_door_z = center_start_z + ((center_depth * 2) / 3);
+    if (lower_door_z >= center_end_z) {
+        lower_door_z = center_end_z - 1;
+    }
+    lb_apply_internal_partition_x(
+        grid_size,
+        voxel_types,
+        surfaces_out,
+        faces_per_cell,
+        x_boundary,
+        center_start_z,
+        center_end_z,
+        1,
+        2,
+        1,
+        lower_door_z
+    );
+
+    size_t upper_wall_base_y = upper_floor_y + 1;
+    if (upper_wall_base_y + 1 < grid_size) {
+        size_t upper_door_x = center_start_x + (center_width / 3);
+        if (upper_door_x >= center_end_x) {
+            upper_door_x = center_end_x - 1;
+        }
+        lb_apply_internal_partition_z(
+            grid_size,
+            voxel_types,
+            surfaces_out,
+            faces_per_cell,
+            z_boundary,
+            center_start_x,
+            center_end_x,
+            upper_wall_base_y,
+            upper_wall_base_y + 1,
+            upper_wall_base_y,
+            upper_door_x
+        );
+    }
+
+    size_t ladder_z = center_start_z;
+    size_t ladder_y_end = upper_floor_y + 1;
+    if (ladder_y_end >= grid_size) {
+        ladder_y_end = grid_size - 1;
+    }
+    lb_apply_ladder_run_x(
+        grid_size,
+        surfaces_out,
+        faces_per_cell,
+        x_boundary,
+        ladder_z,
+        1,
+        ladder_y_end
+    );
+
+    size_t ladder_x = x_boundary - 1;
+    lb_apply_internal_trapdoor(
+        grid_size,
+        voxel_types,
+        surfaces_out,
+        faces_per_cell,
+        ladder_x,
+        lower_floor_y,
+        ladder_z
+    );
+    lb_apply_internal_trapdoor(
+        grid_size,
+        voxel_types,
+        surfaces_out,
+        faces_per_cell,
+        ladder_x,
+        upper_floor_y,
+        ladder_z
+    );
+}
+
 static void lb_apply_window_layout(
     size_t grid_size,
     uint8_t *surfaces_out,
@@ -1382,6 +1828,16 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
             surfaces_out,
             faces_per_cell
         );
+        lb_apply_agent_built_internal_architecture(
+            grid_size,
+            voxel_types_out,
+            surfaces_out,
+            faces_per_cell,
+            center_start_x,
+            center_end_x,
+            center_start_z,
+            center_end_z
+        );
         return;
     }
 
@@ -1563,7 +2019,8 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
      * 1) derive surfaces from material transitions
      * 2) apply deterministic shaft window layout
      * 3) fill incidental vertical interfaces (soil<->air overwrites to wall)
-     * 4) apply deterministic shaft door layout
+     * 4) stamp the initial agent-built interior scaffold
+     * 5) apply deterministic shaft door layout
      */
     lb_assign_surfaces_from_transitions(grid_size, voxel_types_out, surfaces_out, faces_per_cell);
     lb_apply_window_layout(
@@ -1581,6 +2038,16 @@ void lb_randomize_voxels(size_t grid_size, uint8_t *voxel_types_out, uint8_t *su
         voxel_types_out,
         surfaces_out,
         faces_per_cell
+    );
+    lb_apply_agent_built_internal_architecture(
+        grid_size,
+        voxel_types_out,
+        surfaces_out,
+        faces_per_cell,
+        center_start_x,
+        center_end_x,
+        center_start_z,
+        center_end_z
     );
     lb_apply_door_layout(
         grid_size,

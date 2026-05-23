@@ -16,6 +16,7 @@ enum SurfaceType: UInt8 {
     case floorWall = 3
     case wideDoorSegmentA = 4
     case wideDoorSegmentB = 5
+    case ladder = 6
 }
 
 enum CubeFace: Int, CaseIterable {
@@ -71,6 +72,10 @@ enum VoxelSceneFactory {
 
     private static let windowMaterial = makePatternFaceMaterial(
         image: makeDoorOrWindowImage(innerTransparent: true)
+    )
+
+    private static let ladderMaterial = makePatternFaceMaterial(
+        image: makeLadderImage()
     )
 
     private static let openMaterial = makeOpenFaceMaterial()
@@ -750,6 +755,8 @@ enum VoxelSceneFactory {
             return windowMaterial
         case .floorWall:
             return wallMaterial
+        case .ladder:
+            return ladderMaterial
         }
     }
 
@@ -765,6 +772,8 @@ enum VoxelSceneFactory {
             return windowMaterial
         case .floorWall:
             return wallMaterial
+        case .ladder:
+            return ladderMaterial
         case .open:
             return openMaterial
         }
@@ -924,6 +933,59 @@ enum VoxelSceneFactory {
             cg.setLineWidth(6)
             cg.strokeEllipse(in: fullOval)
             cg.restoreGState()
+        }
+    }
+
+    private static func makeLadderImage() -> UIImage {
+        let size = CGSize(width: 256, height: 256)
+        let renderer = UIGraphicsImageRenderer(size: size)
+
+        return renderer.image { context in
+            let cg = context.cgContext
+
+            cg.clear(CGRect(origin: .zero, size: size))
+            cg.setLineCap(.round)
+
+            let railColor = UIColor(red: 0.72, green: 0.67, blue: 0.56, alpha: 1.0)
+            let shadowColor = UIColor(red: 0.24, green: 0.22, blue: 0.18, alpha: 1.0)
+            let rungColor = UIColor(red: 0.84, green: 0.79, blue: 0.66, alpha: 1.0)
+
+            let leftRailX: CGFloat = 72
+            let rightRailX: CGFloat = 184
+            let topY: CGFloat = 24
+            let bottomY: CGFloat = 232
+
+            cg.setStrokeColor(shadowColor.cgColor)
+            cg.setLineWidth(18)
+            cg.move(to: CGPoint(x: leftRailX + 4, y: topY + 4))
+            cg.addLine(to: CGPoint(x: leftRailX + 4, y: bottomY + 4))
+            cg.move(to: CGPoint(x: rightRailX + 4, y: topY + 4))
+            cg.addLine(to: CGPoint(x: rightRailX + 4, y: bottomY + 4))
+            cg.strokePath()
+
+            cg.setStrokeColor(railColor.cgColor)
+            cg.setLineWidth(14)
+            cg.move(to: CGPoint(x: leftRailX, y: topY))
+            cg.addLine(to: CGPoint(x: leftRailX, y: bottomY))
+            cg.move(to: CGPoint(x: rightRailX, y: topY))
+            cg.addLine(to: CGPoint(x: rightRailX, y: bottomY))
+            cg.strokePath()
+
+            cg.setStrokeColor(shadowColor.cgColor)
+            cg.setLineWidth(14)
+            for rungY in stride(from: CGFloat(54), through: CGFloat(206), by: CGFloat(38)) {
+                cg.move(to: CGPoint(x: leftRailX + 4, y: rungY + 4))
+                cg.addLine(to: CGPoint(x: rightRailX + 4, y: rungY + 4))
+            }
+            cg.strokePath()
+
+            cg.setStrokeColor(rungColor.cgColor)
+            cg.setLineWidth(10)
+            for rungY in stride(from: CGFloat(54), through: CGFloat(206), by: CGFloat(38)) {
+                cg.move(to: CGPoint(x: leftRailX, y: rungY))
+                cg.addLine(to: CGPoint(x: rightRailX, y: rungY))
+            }
+            cg.strokePath()
         }
     }
 }
