@@ -45,6 +45,7 @@ struct VoxelCell {
 }
 
 enum VoxelSceneFactory {
+    private static let interactionContainerName = "lastbreachInteractionContainer"
     private static let voxelContainerName = "voxelContainer"
     private static let fullEnvironmentContainerName = "fullEnvironmentContainer"
     private static let interfacesOnlyContainerName = "interfacesOnlyContainer"
@@ -106,6 +107,9 @@ enum VoxelSceneFactory {
     ) -> SCNScene {
         let scene = SCNScene()
 
+        let interactionContainer = SCNNode()
+        interactionContainer.name = interactionContainerName
+
         let voxelContainer = SCNNode()
         voxelContainer.name = voxelContainerName
         let fullEnvironmentContainer = SCNNode()
@@ -116,7 +120,8 @@ enum VoxelSceneFactory {
 
         voxelContainer.addChildNode(fullEnvironmentContainer)
         voxelContainer.addChildNode(interfacesOnlyContainer)
-        scene.rootNode.addChildNode(voxelContainer)
+        interactionContainer.addChildNode(voxelContainer)
+        scene.rootNode.addChildNode(interactionContainer)
 
         /* Build randomized voxel payload first, then scene graph around it. */
         let grid = makeGrid(size: size)
@@ -136,6 +141,16 @@ enum VoxelSceneFactory {
         voxelContainer.runAction(spin)
 
         return scene
+    }
+
+    static func interactionContainer(in scene: SCNScene) -> SCNNode {
+        if let node = scene.rootNode.childNode(withName: interactionContainerName, recursively: true) {
+            return node
+        }
+        if let node = scene.rootNode.childNode(withName: voxelContainerName, recursively: true) {
+            return node
+        }
+        return scene.rootNode
     }
 
     static func setRenderMode(_ interfacesOnly: Bool, showGrid: Bool, in scene: SCNScene) {

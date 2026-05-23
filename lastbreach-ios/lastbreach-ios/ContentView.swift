@@ -92,40 +92,23 @@ struct ContentView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            ZStack {
+            let deckHeight = bottomDeckHeight(for: proxy)
+
+            VStack(spacing: 0) {
                 LastBreachSceneView(scene: scene) { entityID in
                     selectEntity(entityID)
                 }
-                .ignoresSafeArea()
+                .frame(width: proxy.size.width, height: max(proxy.size.height - deckHeight, 1))
+                .contentShape(Rectangle())
+                .allowsHitTesting(true)
+                .clipped()
 
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .top, spacing: 10) {
-                        topControls
-                        Spacer(minLength: 0)
-
-                        if proxy.size.width > 620 {
-                            planningPanel(maxHeight: proxy.size.height * 0.70)
-                                .frame(width: min(380, proxy.size.width * 0.44))
-                        }
-                    }
-                    .padding(.top, 14)
-                    .padding(.horizontal, 14)
-
-                    if proxy.size.width <= 620 {
-                        planningPanel(maxHeight: proxy.size.height * 0.46)
-                            .frame(maxWidth: proxy.size.width - 28)
-                            .padding(.horizontal, 14)
-                    }
-
-                    Spacer()
-
-                    if let selectedEntity {
-                        infoPanel(for: selectedEntity)
-                            .padding(.horizontal, 14)
-                            .padding(.bottom, 16)
-                    }
-                }
+                bottomControls(for: proxy, deckHeight: deckHeight)
+                    .frame(width: proxy.size.width, height: deckHeight, alignment: .bottom)
+                    .background(Color.black.opacity(0.92))
+                    .clipped()
             }
+            .ignoresSafeArea(.keyboard, edges: .bottom)
             .background(Color.black)
         }
         .onDisappear {
@@ -169,6 +152,55 @@ struct ContentView: View {
 
     private var currentAlerts: [SimulationWeakLinkAlert] {
         Array((currentSnapshot?.weakLinkAlerts ?? []).prefix(6))
+    }
+
+    private func bottomDeckHeight(for proxy: GeometryProxy) -> CGFloat {
+        if proxy.size.width > 620 {
+            return min(360, max(210, proxy.size.height * 0.36))
+        }
+        return min(320, max(220, proxy.size.height * 0.34))
+    }
+
+    private func bottomControls(for proxy: GeometryProxy, deckHeight: CGFloat) -> some View {
+        Group {
+            if proxy.size.width > 620 {
+                HStack(alignment: .bottom, spacing: 10) {
+                    topControls
+
+                    planningPanel(maxHeight: max(170, deckHeight - 28))
+                        .frame(width: min(420, proxy.size.width * 0.46))
+
+                    if let selectedEntity {
+                        infoPanel(for: selectedEntity)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 16)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            topControls
+                            Spacer(minLength: 0)
+                        }
+
+                        if let selectedEntity {
+                            infoPanel(for: selectedEntity)
+                                .frame(maxWidth: proxy.size.width - 28, alignment: .leading)
+                        }
+
+                        planningPanel(maxHeight: max(130, deckHeight - (selectedEntity == nil ? 74 : 146)))
+                            .frame(maxWidth: proxy.size.width - 28)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.top, 8)
+                    .padding(.bottom, 16)
+                }
+                .scrollIndicators(.hidden)
+            }
+        }
     }
 
     private var topControls: some View {
