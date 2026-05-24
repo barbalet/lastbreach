@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var sceneState: VisualSceneState
     @State private var sceneLayout: VisualSceneLayout
     @State private var planningState: DayPlanningState
+    @State private var sceneZoom: Float = 1
     @State private var selectedEntityID: String?
     @State private var scene: SCNScene
     @State private var simulationTrace: SimulationTrace
@@ -95,7 +96,11 @@ struct ContentView: View {
             let deckHeight = bottomDeckHeight(for: proxy)
 
             VStack(spacing: 0) {
-                LastBreachSceneView(scene: scene) { entityID in
+                LastBreachSceneView(
+                    scene: scene,
+                    zoomScale: sceneZoom,
+                    onZoomScaleChanged: { sceneZoom = $0 }
+                ) { entityID in
                     selectEntity(entityID)
                 }
                 .frame(width: proxy.size.width, height: max(proxy.size.height - deckHeight, 1))
@@ -105,6 +110,7 @@ struct ContentView: View {
 
                 bottomControls(for: proxy, deckHeight: deckHeight)
                     .frame(width: proxy.size.width, height: deckHeight, alignment: .bottom)
+                    .contentShape(Rectangle())
                     .background(Color.black.opacity(0.92))
                     .clipped()
             }
@@ -224,6 +230,22 @@ struct ContentView: View {
             .accessibilityLabel(showGrid ? "Remove grid" : "Show grid")
 
             Button {
+                adjustSceneZoom(by: 1.24)
+            } label: {
+                Image(systemName: "plus.magnifyingglass")
+                    .frame(width: 34, height: 34)
+            }
+            .accessibilityLabel("Zoom in hideaway")
+
+            Button {
+                adjustSceneZoom(by: 1 / 1.24)
+            } label: {
+                Image(systemName: "minus.magnifyingglass")
+                    .frame(width: 34, height: 34)
+            }
+            .accessibilityLabel("Zoom out hideaway")
+
+            Button {
                 rebuildScene()
             } label: {
                 Image(systemName: "arrow.clockwise")
@@ -235,6 +257,10 @@ struct ContentView: View {
         .foregroundStyle(.white)
         .padding(6)
         .background(.black.opacity(0.54), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func adjustSceneZoom(by multiplier: Float) {
+        sceneZoom = min(max(sceneZoom * multiplier, 0.72), 5.25)
     }
 
     private func planningPanel(maxHeight: CGFloat) -> some View {

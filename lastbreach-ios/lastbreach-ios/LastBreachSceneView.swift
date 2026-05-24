@@ -17,6 +17,8 @@ private final class InteractiveSCNView: SCNView {
 
 struct LastBreachSceneView: UIViewRepresentable {
     let scene: SCNScene
+    let zoomScale: Float
+    let onZoomScaleChanged: (Float) -> Void
     let onSelectEntity: (String?) -> Void
 
     func makeUIView(context: Context) -> SCNView {
@@ -65,26 +67,36 @@ struct LastBreachSceneView: UIViewRepresentable {
 
     func updateUIView(_ view: SCNView, context: Context) {
         context.coordinator.onSelectEntity = onSelectEntity
+        context.coordinator.onZoomScaleChanged = onZoomScaleChanged
         if view.scene !== scene {
             view.scene = scene
             context.coordinator.resetCameraReference()
             context.coordinator.configureCamera(in: view)
         }
+        context.coordinator.applyZoomScale(zoomScale, in: view)
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onSelectEntity: onSelectEntity)
+        Coordinator(
+            onSelectEntity: onSelectEntity,
+            onZoomScaleChanged: onZoomScaleChanged
+        )
     }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var onSelectEntity: (String?) -> Void
+        var onZoomScaleChanged: (Float) -> Void
         private var baseCameraDistance: Float?
         private var pinchStartScale: Float = 1
         private var rotateStartEuler = SCNVector3(0, 0, 0)
         private var panStartPosition = SCNVector3(0, 0, 0)
 
-        init(onSelectEntity: @escaping (String?) -> Void) {
+        init(
+            onSelectEntity: @escaping (String?) -> Void,
+            onZoomScaleChanged: @escaping (Float) -> Void
+        ) {
             self.onSelectEntity = onSelectEntity
+            self.onZoomScaleChanged = onZoomScaleChanged
         }
 
         func resetCameraReference() {
@@ -99,6 +111,19 @@ struct LastBreachSceneView: UIViewRepresentable {
             if baseCameraDistance == nil {
                 baseCameraDistance = max(cameraNode.position.z, 0.1)
             }
+        }
+
+        func applyZoomScale(_ zoomScale: Float, in view: SCNView) {
+            guard let contentNode = contentNode(in: view) else {
+                return
+            }
+
+            let scale = clamped(zoomScale, min: 0.72, max: 5.25)
+            guard abs(contentNode.scale.x - scale) > 0.001 else {
+                return
+            }
+            contentNode.scale = SCNVector3(scale, scale, scale)
+            contentNode.position = clampedContentPosition(contentNode.position, scale: scale)
         }
 
         @objc func handleTap(_ recognizer: UITapGestureRecognizer) {
@@ -130,6 +155,7 @@ struct LastBreachSceneView: UIViewRepresentable {
                 let scale = clamped(pinchStartScale * Float(recognizer.scale), min: 0.72, max: 5.25)
                 contentNode.scale = SCNVector3(scale, scale, scale)
                 contentNode.position = clampedContentPosition(contentNode.position, scale: scale)
+                onZoomScaleChanged(scale)
             default:
                 break
             }
@@ -187,6 +213,7 @@ struct LastBreachSceneView: UIViewRepresentable {
             contentNode.eulerAngles = SCNVector3(0, 0, 0)
             contentNode.scale = SCNVector3(1, 1, 1)
             SCNTransaction.commit()
+            onZoomScaleChanged(1)
         }
 
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
