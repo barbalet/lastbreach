@@ -53,8 +53,10 @@ enum VoxelSceneFactory {
     private static let actionContainerName = "lastbreachActionContainer"
     static let cameraNodeName = "lastbreachCamera"
     private static let selectionHaloName = "selectionHalo"
+    private static let movableUnitMarkerName = "movableUnitMarker"
     private static let entityNamePrefix = "lastbreach.entity."
     private static let voxelUnit = CGFloat(0.05)
+    private static let movableUnitAccent = UIColor(red: 0.44, green: 0.90, blue: 0.88, alpha: 1.0)
 
     private static let wallMaterial = makeOpaqueFaceMaterial(
         color: UIColor(red: 0.31, green: 0.30, blue: 0.27, alpha: 1.0)
@@ -246,6 +248,7 @@ enum VoxelSceneFactory {
 
         switch entity.kind {
         case .character:
+            root.addChildNode(makeMovableUnitMarker())
             root.addChildNode(makeCharacterNode(for: entity))
         case .station:
             root.addChildNode(makeStationNode(for: entity))
@@ -559,6 +562,67 @@ enum VoxelSceneFactory {
         return node
     }
 
+    private static func makeMovableUnitMarker() -> SCNNode {
+        let root = SCNNode()
+        root.name = movableUnitMarkerName
+
+        let pulseGeometry = SCNTorus(ringRadius: 0.027, pipeRadius: 0.0012)
+        pulseGeometry.materials = [
+            makeEntityMaterial(
+                color: movableUnitAccent.withAlphaComponent(0.72),
+                emission: movableUnitAccent.withAlphaComponent(0.42)
+            )
+        ]
+        let pulse = SCNNode(geometry: pulseGeometry)
+        pulse.eulerAngles = SCNVector3(Float.pi / 2.0, 0, 0)
+        pulse.position = SCNVector3(0, 0.002, 0)
+        pulse.opacity = 0.72
+        pulse.runAction(
+            .repeatForever(
+                .sequence([
+                    .group([
+                        .scale(to: 1.20, duration: 1.05),
+                        .fadeOpacity(to: 0.18, duration: 1.05)
+                    ]),
+                    .group([
+                        .scale(to: 1.0, duration: 0.01),
+                        .fadeOpacity(to: 0.72, duration: 0.01)
+                    ])
+                ])
+            )
+        )
+        root.addChildNode(pulse)
+
+        let ringGeometry = SCNTorus(ringRadius: 0.023, pipeRadius: 0.0022)
+        ringGeometry.materials = [
+            makeEntityMaterial(
+                color: movableUnitAccent,
+                emission: movableUnitAccent.withAlphaComponent(0.55)
+            )
+        ]
+        let ring = SCNNode(geometry: ringGeometry)
+        ring.eulerAngles = SCNVector3(Float.pi / 2.0, 0, 0)
+        ring.position = SCNVector3(0, 0.0035, 0)
+        root.addChildNode(ring)
+
+        let badge = makeMovableUnitBadge()
+        badge.position = SCNVector3(0.032, Float(voxelUnit * 1.86), 0)
+        root.addChildNode(badge)
+
+        return root
+    }
+
+    private static func makeMovableUnitBadge() -> SCNNode {
+        let plane = SCNPlane(width: 0.022, height: 0.022)
+        plane.materials = [makeBadgeMaterial(image: makeMovableUnitBadgeImage())]
+
+        let node = SCNNode(geometry: plane)
+        let billboard = SCNBillboardConstraint()
+        billboard.freeAxes = .all
+        node.constraints = [billboard]
+        return node
+    }
+
     private static func selectionRadius(for kind: VisualSceneEntityKind) -> CGFloat {
         switch kind {
         case .character:
@@ -843,6 +907,18 @@ enum VoxelSceneFactory {
         return material
     }
 
+    private static func makeBadgeMaterial(image: UIImage) -> SCNMaterial {
+        let material = SCNMaterial()
+        material.lightingModel = .constant
+        material.diffuse.contents = image
+        material.transparent.contents = image
+        material.transparencyMode = .dualLayer
+        material.blendMode = .alpha
+        material.isDoubleSided = true
+        material.writesToDepthBuffer = false
+        return material
+    }
+
     private static func makeOpenFaceMaterial() -> SCNMaterial {
         let material = SCNMaterial()
         material.diffuse.contents = UIColor.clear
@@ -854,6 +930,37 @@ enum VoxelSceneFactory {
         material.writesToDepthBuffer = false
         material.readsFromDepthBuffer = false
         return material
+    }
+
+    private static func makeMovableUnitBadgeImage() -> UIImage {
+        let size = CGSize(width: 128, height: 128)
+        let renderer = UIGraphicsImageRenderer(size: size)
+
+        return renderer.image { context in
+            let cg = context.cgContext
+            let bounds = CGRect(origin: .zero, size: size).insetBy(dx: 10, dy: 10)
+
+            cg.setFillColor(movableUnitAccent.cgColor)
+            cg.fillEllipse(in: bounds)
+
+            cg.setStrokeColor(UIColor.white.withAlphaComponent(0.92).cgColor)
+            cg.setLineWidth(8)
+            cg.strokeEllipse(in: bounds.insetBy(dx: 4, dy: 4))
+
+            let arrow = UIBezierPath()
+            arrow.move(to: CGPoint(x: 46, y: 32))
+            arrow.addLine(to: CGPoint(x: 94, y: 64))
+            arrow.addLine(to: CGPoint(x: 46, y: 96))
+            arrow.addLine(to: CGPoint(x: 46, y: 75))
+            arrow.addLine(to: CGPoint(x: 25, y: 75))
+            arrow.addLine(to: CGPoint(x: 25, y: 53))
+            arrow.addLine(to: CGPoint(x: 46, y: 53))
+            arrow.close()
+
+            cg.setFillColor(UIColor(red: 0.02, green: 0.025, blue: 0.03, alpha: 1.0).cgColor)
+            cg.addPath(arrow.cgPath)
+            cg.fillPath()
+        }
     }
 
     private static func makeDoorOrWindowImage(innerTransparent: Bool) -> UIImage {

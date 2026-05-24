@@ -111,7 +111,12 @@ struct ContentView: View {
                 bottomControls(for: proxy, deckHeight: deckHeight)
                     .frame(width: proxy.size.width, height: deckHeight, alignment: .bottom)
                     .contentShape(Rectangle())
-                    .background(Color.black.opacity(0.92))
+                    .background(Color(red: 0.02, green: 0.025, blue: 0.03))
+                    .overlay(alignment: .top) {
+                        Rectangle()
+                            .fill(Color.white.opacity(0.18))
+                            .frame(height: 1)
+                    }
                     .clipped()
             }
             .ignoresSafeArea(.keyboard, edges: .bottom)
@@ -125,6 +130,10 @@ struct ContentView: View {
 
     private var selectedEntity: VisualSceneEntity? {
         sceneLayout.entity(withID: selectedEntityID)
+    }
+
+    private var movableUnitAccent: Color {
+        Color(red: 0.44, green: 0.90, blue: 0.88)
     }
 
     private var currentSnapshot: SimulationSnapshot? {
@@ -254,9 +263,13 @@ struct ContentView: View {
             .accessibilityLabel("Rebuild scene")
         }
         .font(.system(size: 16, weight: .semibold))
-        .foregroundStyle(.white)
+        .buttonStyle(SceneToolbarButtonStyle())
         .padding(6)
-        .background(.black.opacity(0.54), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(Color(red: 0.07, green: 0.08, blue: 0.09), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.white.opacity(0.26), lineWidth: 1)
+        }
     }
 
     private func adjustSceneZoom(by multiplier: Float) {
@@ -457,7 +470,16 @@ struct ContentView: View {
             HStack(spacing: 8) {
                 Circle()
                     .fill(Color(uiColor: character.color))
-                    .frame(width: 10, height: 10)
+                    .frame(width: 12, height: 12)
+                    .overlay {
+                        Circle()
+                            .stroke(movableUnitAccent, lineWidth: 2)
+                    }
+
+                Image(systemName: "figure.walk.circle.fill")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(validation.isValid ? movableUnitAccent : .orange)
+                    .accessibilityLabel(validation.isValid ? "Movable unit" : "Movable unit needs attention")
 
                 Text(character.name)
                     .font(.headline)
@@ -493,8 +515,14 @@ struct ContentView: View {
         .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(validation.isValid ? .white.opacity(0.08) : Color.orange.opacity(0.66), lineWidth: 1)
+                .stroke(validation.isValid ? movableUnitAccent.opacity(0.48) : Color.orange.opacity(0.66), lineWidth: 1)
         )
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(validation.isValid ? movableUnitAccent : Color.orange)
+                .frame(width: 4)
+                .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+        }
     }
 
     private func simulationTaskRow(task: VisualTask?, assignment: PlanningAssignment) -> some View {
@@ -1091,5 +1119,20 @@ private struct PlanningIconButtonStyle: ButtonStyle {
                 .white.opacity(configuration.isPressed ? 0.20 : 0.10),
                 in: RoundedRectangle(cornerRadius: 8, style: .continuous)
             )
+    }
+}
+
+private struct SceneToolbarButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(Color.white)
+            .background(
+                Color.white.opacity(configuration.isPressed ? 0.24 : 0.14),
+                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(Color.white.opacity(configuration.isPressed ? 0.42 : 0.30), lineWidth: 1)
+            }
     }
 }
